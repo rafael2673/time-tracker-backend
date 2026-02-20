@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.0.xsd">
+
+    <changeSet id="04-create-time-records" author="system">
+        <createTable tableName="time_records">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="workspace_id" type="UUID"/>
+            <column name="record_type" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="registered_at" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="justification" type="TEXT"/>
+            <column name="edited_from_id" type="UUID"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="time_records" baseColumnNames="user_id"
+                                 constraintName="fk_time_records_user"
+                                 referencedTableName="users" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="time_records" baseColumnNames="workspace_id"
+                                 constraintName="fk_time_records_workspace"
+                                 referencedTableName="workspaces" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="time_records" baseColumnNames="edited_from_id"
+                                 constraintName="fk_time_records_edited_from"
+                                 referencedTableName="time_records" referencedColumnNames="id"/>
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="time_records" constraintName="fk_time_records_edited_from"/>
+            <dropForeignKeyConstraint baseTableName="time_records" constraintName="fk_time_records_workspace"/>
+            <dropForeignKeyConstraint baseTableName="time_records" constraintName="fk_time_records_user"/>
+            <dropTable tableName="time_records"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

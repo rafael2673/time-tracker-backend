@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.0.xsd">
+
+    <changeSet id="02-create-users" author="system">
+        <createTable tableName="users">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="email" type="VARCHAR(255)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="password_hash" type="VARCHAR(255)"/>
+            <column name="full_name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="role" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="manager_id" type="UUID"/>
+            <column name="work_policy_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="users" baseColumnNames="manager_id"
+                                 constraintName="fk_users_manager"
+                                 referencedTableName="users" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="users" baseColumnNames="work_policy_id"
+                                 constraintName="fk_users_work_policy"
+                                 referencedTableName="work_policies" referencedColumnNames="id"/>
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="users" constraintName="fk_users_work_policy"/>
+            <dropForeignKeyConstraint baseTableName="users" constraintName="fk_users_manager"/>
+            <dropTable tableName="users"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
