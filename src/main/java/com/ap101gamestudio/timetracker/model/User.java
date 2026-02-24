@@ -2,11 +2,18 @@ package com.ap101gamestudio.timetracker.model;
 
 import com.ap101gamestudio.timetracker.model.enums.UserRole;
 import jakarta.persistence.*;
+import org.jspecify.annotations.NonNull;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+
+import java.util.Collection;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
 @Table(name = "users")
-public class User {
+public class User implements UserDetails {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -40,15 +47,6 @@ public class User {
         if (email == null || email.isBlank()) {
             throw new IllegalArgumentException("Email cannot be null or blank");
         }
-        if (fullName == null || fullName.isBlank()) {
-            throw new IllegalArgumentException("Full name cannot be null or blank");
-        }
-        if (role == null) {
-            throw new IllegalArgumentException("Role cannot be null");
-        }
-        if (workPolicy == null) {
-            throw new IllegalArgumentException("Work policy cannot be null");
-        }
         this.email = email;
         this.passwordHash = passwordHash;
         this.fullName = fullName;
@@ -57,11 +55,61 @@ public class User {
         this.workPolicy = workPolicy;
     }
 
-    public UUID getId() { return id; }
-    public String getEmail() { return email; }
-    public String getPasswordHash() { return passwordHash; }
-    public String getFullName() { return fullName; }
-    public UserRole getRole() { return role; }
-    public User getManager() { return manager; }
-    public WorkPolicy getWorkPolicy() { return workPolicy; }
+    public UUID getId() {
+        return id;
+    }
+
+    public String getFullName() {
+        return fullName;
+    }
+
+    public UserRole getRole() {
+        return role;
+    }
+
+    public User getManager() {
+        return manager;
+    }
+
+    public WorkPolicy getWorkPolicy() {
+        return workPolicy;
+    }
+
+    @Override
+    @NonNull
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        return List.of(new SimpleGrantedAuthority(role.name()));
+    }
+
+    @Override
+    @NonNull
+    public String getPassword() {
+        return passwordHash != null ? passwordHash : "";
+    }
+
+    @Override
+    @NonNull
+    public String getUsername() {
+        return email;
+    }
+
+    @Override
+    public boolean isAccountNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+        return true;
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return true;
+    }
 }
