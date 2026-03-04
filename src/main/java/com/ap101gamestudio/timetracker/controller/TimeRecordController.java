@@ -44,11 +44,14 @@ public class TimeRecordController {
         return ResponseEntity.ok(response);
     }
 
-    @GetMapping("/today")
-    public ResponseEntity<List<TimeRecordResponse>> getTodayRecords(Authentication authentication) {
+    @GetMapping
+    public ResponseEntity<List<TimeRecordResponse>> getRecordsByDate(
+            @RequestParam(required = false) LocalDate date,
+            Authentication authentication
+    ) {
         String email = authentication.getName();
-        LocalDate today = LocalDate.now();
-        List<TimeRecordResponse> response = timeTrackingService.getRecordsByDate(email, today);
+        LocalDate targetDate = (date != null) ? date : LocalDate.now();
+        List<TimeRecordResponse> response = timeTrackingService.getRecordsByDate(email, targetDate);
         return ResponseEntity.ok(response);
     }
 }
