@@ -54,9 +54,9 @@ public class FlexibleHoursStrategy implements TimeCalculationStrategy {
         TimeRecord lastEntry = null;
 
         for (TimeRecord record : sortedRecords) {
-            if (record.getRecordType() == RecordType.ENTRY || record.getRecordType() == RecordType.LUNCH_END) {
+            if (record.getRecordType() == RecordType.ENTRY || record.getRecordType() == RecordType.PAUSE_END) {
                 lastEntry = record;
-            } else if ((record.getRecordType() == RecordType.EXIT || record.getRecordType() == RecordType.LUNCH_START) && lastEntry != null) {
+            } else if ((record.getRecordType() == RecordType.EXIT || record.getRecordType() == RecordType.PAUSE_START) && lastEntry != null) {
                 totalDuration = totalDuration.plus(Duration.between(lastEntry.getRegisteredAt(), record.getRegisteredAt()));
                 lastEntry = null;
             }

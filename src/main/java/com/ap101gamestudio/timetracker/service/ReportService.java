@@ -93,10 +93,10 @@ public class ReportService {
         records.stream().filter(r -> r.getRecordType() == RecordType.ENTRY)
                 .findFirst().ifPresent(r -> createCell(row, 2, r.getRegisteredAt().format(timeFormatter), style));
 
-        records.stream().filter(r -> r.getRecordType() == RecordType.LUNCH_START)
+        records.stream().filter(r -> r.getRecordType() == RecordType.PAUSE_START)
                 .findFirst().ifPresent(r -> createCell(row, 3, r.getRegisteredAt().format(timeFormatter), style));
 
-        records.stream().filter(r -> r.getRecordType() == RecordType.LUNCH_END)
+        records.stream().filter(r -> r.getRecordType() == RecordType.PAUSE_END)
                 .findFirst().ifPresent(r -> createCell(row, 4, r.getRegisteredAt().format(timeFormatter), style));
 
         records.stream().filter(r -> r.getRecordType() == RecordType.EXIT)

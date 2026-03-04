@@ -24,8 +24,8 @@ class FlexibleHoursStrategyTest {
 
         List<TimeRecord> records = List.of(
                 new TimeRecord(user, null, RecordType.ENTRY, RecordSource.MANUAL, date.withHour(8).withMinute(0), null, null),
-                new TimeRecord(user, null, RecordType.LUNCH_START, RecordSource.MANUAL, date.withHour(12).withMinute(0), null, null),
-                new TimeRecord(user, null, RecordType.LUNCH_END, RecordSource.MANUAL, date.withHour(13).withMinute(0), null, null),
+                new TimeRecord(user, null, RecordType.PAUSE_START, RecordSource.MANUAL, date.withHour(12).withMinute(0), null, null),
+                new TimeRecord(user, null, RecordType.PAUSE_END, RecordSource.MANUAL, date.withHour(13).withMinute(0), null, null),
                 new TimeRecord(user, null, RecordType.EXIT, RecordSource.MANUAL, date.withHour(17).withMinute(5), null, null)
         );
 
@@ -42,8 +42,8 @@ class FlexibleHoursStrategyTest {
 
         List<TimeRecord> records = List.of(
                 new TimeRecord(user, null, RecordType.ENTRY, RecordSource.MANUAL, date.withHour(8).withMinute(0), null, null),
-                new TimeRecord(user, null, RecordType.LUNCH_START, RecordSource.MANUAL, date.withHour(12).withMinute(0), null, null),
-                new TimeRecord(user, null, RecordType.LUNCH_END, RecordSource.MANUAL, date.withHour(13).withMinute(0), null, null),
+                new TimeRecord(user, null, RecordType.PAUSE_START, RecordSource.MANUAL, date.withHour(12).withMinute(0), null, null),
+                new TimeRecord(user, null, RecordType.PAUSE_END, RecordSource.MANUAL, date.withHour(13).withMinute(0), null, null),
                 new TimeRecord(user, null, RecordType.EXIT, RecordSource.MANUAL, date.withHour(18).withMinute(0), null, null)
         );
 
@@ -60,8 +60,8 @@ class FlexibleHoursStrategyTest {
 
         List<TimeRecord> records = List.of(
                 new TimeRecord(user, null, RecordType.ENTRY, RecordSource.MANUAL, date.withHour(8).withMinute(0), null, null),
-                new TimeRecord(user, null, RecordType.LUNCH_START, RecordSource.MANUAL, date.withHour(12).withMinute(0), null, null),
-                new TimeRecord(user, null, RecordType.LUNCH_END, RecordSource.MANUAL, date.withHour(13).withMinute(0), null, null)
+                new TimeRecord(user, null, RecordType.PAUSE_START, RecordSource.MANUAL, date.withHour(12).withMinute(0), null, null),
+                new TimeRecord(user, null, RecordType.PAUSE_END, RecordSource.MANUAL, date.withHour(13).withMinute(0), null, null)
         );
 
         Duration regularHours = strategy.calculateRegularHours(records, policy);
