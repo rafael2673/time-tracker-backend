@@ -6,8 +6,11 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import lombok.Getter;
+
 import java.time.LocalDateTime;
 
+@Getter
 @Entity
 @Table(name = "link_codes")
 public class LinkCode {
@@ -31,8 +34,4 @@ public class LinkCode {
         this.expiresAt = expiresAt;
     }
 
-    public Long getId() { return id; }
-    public String getCode() { return code; }
-    public User getUser() { return user; }
-    public LocalDateTime getExpiresAt() { return expiresAt; }
 }
