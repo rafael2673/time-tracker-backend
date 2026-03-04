@@ -1,6 +1,7 @@
 package com.ap101gamestudio.timetracker.service;
 
 import com.ap101gamestudio.timetracker.dto.CreateTimeRecordRequest;
+import com.ap101gamestudio.timetracker.dto.DailySummaryResponse;
 import com.ap101gamestudio.timetracker.dto.TimeRecordResponse;
 import com.ap101gamestudio.timetracker.exceptions.DomainException;
 import com.ap101gamestudio.timetracker.model.TimeRecord;
@@ -12,9 +13,13 @@ import com.ap101gamestudio.timetracker.repository.WorkspaceRepository;
 import com.ap101gamestudio.timetracker.strategy.TimeCalculationStrategy;
 import org.springframework.stereotype.Service;
 
+import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
@@ -72,6 +77,33 @@ public class TimeTrackingService {
                 .toList();
     }
 
+    public List<DailySummaryResponse> getWeeklySummary(String email, LocalDate referenceDate) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new DomainException("User not found"));
+
+        LocalDate startOfWeek = referenceDate;
+        while (startOfWeek.getDayOfWeek() != DayOfWeek.SUNDAY) {
+            startOfWeek = startOfWeek.minusDays(1);
+        }
+
+        List<DailySummaryResponse> weeklySummary = new ArrayList<>();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        String[] dayNames = {"Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"};
+
+        for (int i = 0; i < 7; i++) {
+            LocalDate currentDate = startOfWeek.plusDays(i);
+            LocalDateTime startOfDay = currentDate.atStartOfDay();
+            LocalDateTime endOfDay = currentDate.atTime(23, 59, 59);
+
+            List<TimeRecord> dailyRecords = timeRecordRepository.findByUserIdAndRegisteredAtBetween(user.getId(), startOfDay, endOfDay);
+            double hours = calculateWorkedHours(dailyRecords);
+
+            weeklySummary.add(new DailySummaryResponse(dayNames[i], hours, currentDate.format(formatter)));
+        }
+
+        return weeklySummary;
+    }
+
     public Duration calculateDailyHours(UUID userId, LocalDateTime date) {
         LocalDateTime startOfDay = date.toLocalDate().atStartOfDay();
         LocalDateTime endOfDay = date.toLocalDate().atTime(23, 59, 59);
@@ -82,6 +114,43 @@ public class TimeTrackingService {
         List<TimeRecord> records = timeRecordRepository.findByUserIdAndRegisteredAtBetween(userId, startOfDay, endOfDay);
 
         return calculationStrategy.calculateOvertime(records, user.getWorkPolicy());
+    }
+
+    private double calculateWorkedHours(List<TimeRecord> records) {
+        if (records == null || records.isEmpty()) return 0.0;
+
+        long totalSeconds = 0;
+        LocalDateTime lastEntry = null;
+        String currentStatus = "IDLE";
+
+        records.sort(Comparator.comparing(TimeRecord::getRegisteredAt));
+
+        for (TimeRecord record : records) {
+            LocalDateTime time = record.getRegisteredAt();
+            switch (record.getRecordType().name()) {
+                case "ENTRY":
+                case "PAUSE_END":
+                    lastEntry = time;
+                    currentStatus = "WORKING";
+                    break;
+                case "PAUSE_START":
+                case "EXIT":
+                    if (lastEntry != null && "WORKING".equals(currentStatus)) {
+                        totalSeconds += Duration.between(lastEntry, time).getSeconds();
+                    }
+                    currentStatus = "PAUSED_OR_FINISHED";
+                    break;
+            }
+        }
+
+        if ("WORKING".equals(currentStatus) && lastEntry != null) {
+            LocalDateTime now = LocalDateTime.now();
+            if (now.toLocalDate().equals(lastEntry.toLocalDate())) {
+                totalSeconds += Duration.between(lastEntry, now).getSeconds();
+            }
+        }
+
+        return Math.round((totalSeconds / 3600.0) * 10.0) / 10.0;
     }
 
     private Workspace findWorkspaceByLocation(Double lat, Double lon) {
