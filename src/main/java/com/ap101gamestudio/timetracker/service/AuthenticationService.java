@@ -52,11 +52,11 @@ public class AuthenticationService {
     @Transactional
     public JwtAuthenticationResponse register(RegisterRequest request) {
         if (userRepository.findByEmail(request.email()).isPresent()) {
-            throw new DomainException("Email already in use");
+            throw new DomainException("error.email.already.in.use");
         }
 
         WorkPolicy policy = workPolicyRepository.findById(request.workPolicyId())
-                .orElseThrow(() -> new DomainException("Work Policy not found"));
+                .orElseThrow(() -> new DomainException("error.work.policy.not_found"));
 
         var user = new User(
                 request.email(),
@@ -80,7 +80,7 @@ public class AuthenticationService {
                 )
         );
         var user = userRepository.findByEmail(request.email())
-                .orElseThrow(() -> new DomainException("User not found"));
+                .orElseThrow(() -> new DomainException("error.user.not_found"));
 
         var jwtToken = jwtService.generateToken(user);
         return new JwtAuthenticationResponse(jwtToken, 86400000L);
@@ -89,7 +89,7 @@ public class AuthenticationService {
     @Transactional
     public GenerateLinkCodeResponse generateLinkCode(String userEmail) {
         User user = userRepository.findByEmail(userEmail)
-                .orElseThrow(() -> new DomainException("User not found"));
+                .orElseThrow(() -> new DomainException("error.user.not_found"));
 
         String code = String.format("%06d", new SecureRandom().nextInt(999999));
         LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(10);
@@ -107,7 +107,7 @@ public class AuthenticationService {
 
         if (linkCode.getExpiresAt().isBefore(LocalDateTime.now())) {
             linkCodeRepository.delete(linkCode);
-            throw new DomainException("Linking code expired");
+            throw new DomainException("error.expired.linking.code");
         }
 
         User user = linkCode.getUser();

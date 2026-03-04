@@ -34,7 +34,7 @@ public class ReportService {
 
     public byte[] generateMonthlyTimesheet(UUID userId, int year, int month) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new DomainException("User not found"));
+                .orElseThrow(() -> new DomainException("error.user.not_found"));
 
         YearMonth yearMonth = YearMonth.of(year, month);
         LocalDateTime start = yearMonth.atDay(1).atStartOfDay();
@@ -83,7 +83,7 @@ public class ReportService {
             workbook.write(out);
             return out.toByteArray();
         } catch (IOException e) {
-            throw new DomainException("Error generating Excel file");
+            throw new DomainException("error.generating.excel");
         }
     }
 
@@ -102,7 +102,6 @@ public class ReportService {
         records.stream().filter(r -> r.getRecordType() == RecordType.EXIT)
                 .reduce((first, second) -> second).ifPresent(r -> createCell(row, 5, r.getRegisteredAt().format(timeFormatter), style));
 
-        // Coluna de Total (simplificada para o exemplo)
         createCell(row, 6, "Calculated via Strategy", style);
     }
 

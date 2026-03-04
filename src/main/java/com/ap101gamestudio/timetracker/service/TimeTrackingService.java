@@ -43,7 +43,7 @@ public class TimeTrackingService {
 
     public TimeRecordResponse registerPoint(String email, CreateTimeRecordRequest request) {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new DomainException("User not found"));
+                .orElseThrow(() -> new DomainException("error.user.not_found"));
 
         Workspace detectedWorkspace = findWorkspaceByLocation(request.latitude(), request.longitude());
 
@@ -63,13 +63,13 @@ public class TimeTrackingService {
 
     public TimeRecordResponse updateRecord(UUID id, String email, UpdateTimeRecordRequest request) {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new DomainException("User not found"));
+                .orElseThrow(() -> new DomainException("error.user.not_found"));
 
         TimeRecord originalRecord = timeRecordRepository.findById(id)
-                .orElseThrow(() -> new DomainException("Record not found"));
+                .orElseThrow(() -> new DomainException("error.record.not_found"));
 
         if (!originalRecord.getUser().getId().equals(user.getId())) {
-            throw new DomainException("You do not have permission to edit this record");
+            throw new DomainException("error.permission.denied");
         }
 
         TimeRecord newRecord = new TimeRecord(
@@ -88,7 +88,7 @@ public class TimeTrackingService {
 
     public List<TimeRecordResponse> getRecordsByDate(String email, LocalDate date) {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new DomainException("User not found"));
+                .orElseThrow(() -> new DomainException("error.user.not_found"));
 
         LocalDateTime startOfDay = date.atStartOfDay();
         LocalDateTime endOfDay = date.atTime(23, 59, 59);
@@ -103,7 +103,7 @@ public class TimeTrackingService {
 
     public List<DailySummaryResponse> getWeeklySummary(String email, LocalDate referenceDate) {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new DomainException("User not found"));
+                .orElseThrow(() -> new DomainException("error.user.not_found"));
 
         LocalDate startOfWeek = referenceDate;
         while (startOfWeek.getDayOfWeek() != DayOfWeek.SUNDAY) {

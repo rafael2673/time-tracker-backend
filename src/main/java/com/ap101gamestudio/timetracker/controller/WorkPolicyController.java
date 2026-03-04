@@ -43,6 +43,6 @@ public class WorkPolicyController {
                     repository.delete(existing);
                     return ResponseEntity.ok(repository.save(newPolicy));
                 })
-                .orElseThrow(() -> new DomainException("Policy not found"));
+                .orElseThrow(() -> new DomainException("error.policy.not_found"));
     }
 }
