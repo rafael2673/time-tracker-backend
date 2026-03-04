@@ -150,7 +150,7 @@ public class TimeTrackingService {
             }
         }
 
-        return Math.round((totalSeconds / 3600.0) * 10.0) / 10.0;
+        return totalSeconds / 3600.0;
     }
 
     private Workspace findWorkspaceByLocation(Double lat, Double lon) {
