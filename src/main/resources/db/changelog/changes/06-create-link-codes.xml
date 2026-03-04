@@ -11,7 +11,7 @@
             <column name="code" type="VARCHAR(255)">
                 <constraints nullable="false" unique="true"/>
             </column>
-            <column name="user_id" type="BIGINT">
+            <column name="user_id" type="UUID">
                 <constraints nullable="false" foreignKeyName="fk_link_codes_user" referencedTableName="users" referencedColumnNames="id"/>
             </column>
             <column name="expires_at" type="TIMESTAMP">
