@@ -10,11 +10,10 @@ import com.ap101gamestudio.timetracker.repository.TimeRecordRepository;
 import com.ap101gamestudio.timetracker.repository.UserRepository;
 import com.ap101gamestudio.timetracker.repository.WorkspaceRepository;
 import com.ap101gamestudio.timetracker.strategy.TimeCalculationStrategy;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -39,15 +38,9 @@ public class TimeTrackingService {
         this.calculationStrategy = calculationStrategy;
     }
 
-    public TimeRecordResponse registerRecord(CreateTimeRecordRequest request) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || auth.getName() == null) {
-            throw new DomainException("No authentication data found");
-        }
-
-        String email = auth.getName();
+    public TimeRecordResponse registerPoint(String email, CreateTimeRecordRequest request) {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new DomainException("User not found in context"));
+                .orElseThrow(() -> new DomainException("User not found"));
 
         Workspace detectedWorkspace = findWorkspaceByLocation(request.latitude(), request.longitude());
 
@@ -56,28 +49,27 @@ public class TimeTrackingService {
                 detectedWorkspace,
                 request.recordType(),
                 request.source(),
-                request.registeredAt(),
+                request.registeredAt() != null ? request.registeredAt() : LocalDateTime.now(),
                 null,
                 null
         );
 
         TimeRecord saved = timeRecordRepository.save(record);
+        return mapToResponse(saved);
+    }
 
-        String workspaceName = "Remote / Unknown";
-        Workspace ws = saved.getWorkspace();
-        if (ws != null) {
-            workspaceName = ws.getName();
-        }
+    public List<TimeRecordResponse> getRecordsByDate(String email, LocalDate date) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new DomainException("User not found"));
 
-        return new TimeRecordResponse(
-                saved.getId(),
-                saved.getUser().getFullName(),
-                workspaceName,
-                saved.getRecordType(),
-                saved.getSource(),
-                saved.getRegisteredAt(),
-                saved.getJustification()
-        );
+        LocalDateTime startOfDay = date.atStartOfDay();
+        LocalDateTime endOfDay = date.atTime(23, 59, 59);
+
+        List<TimeRecord> records = timeRecordRepository.findByUserIdAndRegisteredAtBetween(user.getId(), startOfDay, endOfDay);
+
+        return records.stream()
+                .map(this::mapToResponse)
+                .toList();
     }
 
     public Duration calculateDailyHours(UUID userId, LocalDateTime date) {
@@ -112,5 +104,23 @@ public class TimeTrackingService {
                 * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return R * c;
+    }
+
+    private TimeRecordResponse mapToResponse(TimeRecord saved) {
+        String workspaceName = "Remote / Unknown";
+        Workspace ws = saved.getWorkspace();
+        if (ws != null) {
+            workspaceName = ws.getName();
+        }
+
+        return new TimeRecordResponse(
+                saved.getId(),
+                saved.getUser().getFullName(),
+                workspaceName,
+                saved.getRecordType(),
+                saved.getSource(),
+                saved.getRegisteredAt(),
+                saved.getJustification()
+        );
     }
 }

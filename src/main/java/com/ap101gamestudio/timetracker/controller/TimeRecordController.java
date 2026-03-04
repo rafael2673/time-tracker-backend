@@ -4,38 +4,38 @@ import com.ap101gamestudio.timetracker.dto.CreateTimeRecordRequest;
 import com.ap101gamestudio.timetracker.dto.TimeRecordResponse;
 import com.ap101gamestudio.timetracker.service.TimeTrackingService;
 import jakarta.validation.Valid;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.Duration;
-import java.time.LocalDateTime;
-import java.util.UUID;
+import java.time.LocalDate;
+import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/time-records")
+@RequestMapping("/api/v1/records")
 public class TimeRecordController {
 
-    private final TimeTrackingService service;
+    private final TimeTrackingService timeTrackingService;
 
-    public TimeRecordController(TimeTrackingService service) {
-        this.service = service;
+    public TimeRecordController(TimeTrackingService timeTrackingService) {
+        this.timeTrackingService = timeTrackingService;
     }
 
     @PostMapping
-    public ResponseEntity<TimeRecordResponse> create(@Valid @RequestBody CreateTimeRecordRequest request) {
-        TimeRecordResponse response = service.registerRecord(request);
+    public ResponseEntity<TimeRecordResponse> createRecord(
+            @RequestBody @Valid CreateTimeRecordRequest request,
+            Authentication authentication
+    ) {
+        String email = authentication.getName();
+        TimeRecordResponse response = timeTrackingService.registerPoint(email, request);
         return ResponseEntity.ok(response);
     }
 
-    @GetMapping("/balance")
-    public ResponseEntity<String> getDailyBalance(
-            @RequestParam UUID userId,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime date
-    ) {
-        Duration balance = service.calculateDailyHours(userId, date);
-        long hours = balance.toHours();
-        long minutes = balance.toMinutesPart();
-        return ResponseEntity.ok(String.format("%d hours and %d minutes overtime", hours, minutes));
+    @GetMapping("/today")
+    public ResponseEntity<List<TimeRecordResponse>> getTodayRecords(Authentication authentication) {
+        String email = authentication.getName();
+        LocalDate today = LocalDate.now();
+        List<TimeRecordResponse> response = timeTrackingService.getRecordsByDate(email, today);
+        return ResponseEntity.ok(response);
     }
 }
