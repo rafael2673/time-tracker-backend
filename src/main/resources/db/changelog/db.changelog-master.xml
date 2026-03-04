@@ -9,5 +9,7 @@
     <include file="db/changelog/changes/02-create-users.xml"/>
     <include file="db/changelog/changes/03-create-workspaces.xml"/>
     <include file="db/changelog/changes/04-create-time-records.xml"/>
+    <include file="db/changelog/changes/05-create-api-keys.xml"/>
+    <include file="db/changelog/changes/06-create-link-codes.xml"/>
 
 </databaseChangeLog>
