@@ -142,14 +142,14 @@ public class TimeTrackingService {
 
     private double calculateWorkedHours(List<TimeRecord> records) {
         if (records == null || records.isEmpty()) return 0.0;
-
+        List<TimeRecord> modifiableRecords = new ArrayList<>(records);
         long totalSeconds = 0;
         LocalDateTime lastEntry = null;
         String currentStatus = "IDLE";
 
-        records.sort(Comparator.comparing(TimeRecord::getRegisteredAt));
+        modifiableRecords.sort(Comparator.comparing(TimeRecord::getRegisteredAt));
 
-        for (TimeRecord record : records) {
+        for (TimeRecord record : modifiableRecords) {
             LocalDateTime time = record.getRegisteredAt();
             currentStatus = switch (record.getRecordType().name()) {
                 case "ENTRY", "PAUSE_END" -> {
