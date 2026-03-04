@@ -3,14 +3,15 @@ package com.ap101gamestudio.timetracker.service;
 import com.ap101gamestudio.timetracker.dto.CreateTimeRecordRequest;
 import com.ap101gamestudio.timetracker.dto.DailySummaryResponse;
 import com.ap101gamestudio.timetracker.dto.TimeRecordResponse;
+import com.ap101gamestudio.timetracker.dto.UpdateTimeRecordRequest;
 import com.ap101gamestudio.timetracker.exceptions.DomainException;
 import com.ap101gamestudio.timetracker.model.TimeRecord;
 import com.ap101gamestudio.timetracker.model.User;
 import com.ap101gamestudio.timetracker.model.Workspace;
+import com.ap101gamestudio.timetracker.model.enums.RecordSource;
 import com.ap101gamestudio.timetracker.repository.TimeRecordRepository;
 import com.ap101gamestudio.timetracker.repository.UserRepository;
 import com.ap101gamestudio.timetracker.repository.WorkspaceRepository;
-import com.ap101gamestudio.timetracker.strategy.TimeCalculationStrategy;
 import org.springframework.stereotype.Service;
 
 import java.time.DayOfWeek;
@@ -29,18 +30,15 @@ public class TimeTrackingService {
     private final TimeRecordRepository timeRecordRepository;
     private final UserRepository userRepository;
     private final WorkspaceRepository workspaceRepository;
-    private final TimeCalculationStrategy calculationStrategy;
 
     public TimeTrackingService(
             TimeRecordRepository timeRecordRepository,
             UserRepository userRepository,
-            WorkspaceRepository workspaceRepository,
-            TimeCalculationStrategy calculationStrategy
+            WorkspaceRepository workspaceRepository
     ) {
         this.timeRecordRepository = timeRecordRepository;
         this.userRepository = userRepository;
         this.workspaceRepository = workspaceRepository;
-        this.calculationStrategy = calculationStrategy;
     }
 
     public TimeRecordResponse registerPoint(String email, CreateTimeRecordRequest request) {
@@ -63,6 +61,31 @@ public class TimeTrackingService {
         return mapToResponse(saved);
     }
 
+    public TimeRecordResponse updateRecord(UUID id, String email, UpdateTimeRecordRequest request) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new DomainException("User not found"));
+
+        TimeRecord originalRecord = timeRecordRepository.findById(id)
+                .orElseThrow(() -> new DomainException("Record not found"));
+
+        if (!originalRecord.getUser().getId().equals(user.getId())) {
+            throw new DomainException("You do not have permission to edit this record");
+        }
+
+        TimeRecord newRecord = new TimeRecord(
+                user,
+                originalRecord.getWorkspace(),
+                originalRecord.getRecordType(),
+                RecordSource.MANUAL,
+                request.registeredAt(),
+                request.justification(),
+                originalRecord
+        );
+
+        TimeRecord saved = timeRecordRepository.save(newRecord);
+        return mapToResponse(saved);
+    }
+
     public List<TimeRecordResponse> getRecordsByDate(String email, LocalDate date) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new DomainException("User not found"));
@@ -71,6 +94,7 @@ public class TimeTrackingService {
         LocalDateTime endOfDay = date.atTime(23, 59, 59);
 
         List<TimeRecord> records = timeRecordRepository.findByUserIdAndRegisteredAtBetween(user.getId(), startOfDay, endOfDay);
+        records = filterActiveRecords(records);
 
         return records.stream()
                 .map(this::mapToResponse)
@@ -96,6 +120,7 @@ public class TimeTrackingService {
             LocalDateTime endOfDay = currentDate.atTime(23, 59, 59);
 
             List<TimeRecord> dailyRecords = timeRecordRepository.findByUserIdAndRegisteredAtBetween(user.getId(), startOfDay, endOfDay);
+            dailyRecords = filterActiveRecords(dailyRecords);
             double hours = calculateWorkedHours(dailyRecords);
 
             weeklySummary.add(new DailySummaryResponse(dayNames[i], hours, currentDate.format(formatter)));
@@ -104,16 +129,15 @@ public class TimeTrackingService {
         return weeklySummary;
     }
 
-    public Duration calculateDailyHours(UUID userId, LocalDateTime date) {
-        LocalDateTime startOfDay = date.toLocalDate().atStartOfDay();
-        LocalDateTime endOfDay = date.toLocalDate().atTime(23, 59, 59);
+    private List<TimeRecord> filterActiveRecords(List<TimeRecord> records) {
+        List<UUID> supersededIds = records.stream()
+                .filter(r -> r.getEditedFrom() != null)
+                .map(r -> r.getEditedFrom().getId())
+                .toList();
 
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new DomainException("User not found"));
-
-        List<TimeRecord> records = timeRecordRepository.findByUserIdAndRegisteredAtBetween(userId, startOfDay, endOfDay);
-
-        return calculationStrategy.calculateOvertime(records, user.getWorkPolicy());
+        return records.stream()
+                .filter(r -> !supersededIds.contains(r.getId()))
+                .toList();
     }
 
     private double calculateWorkedHours(List<TimeRecord> records) {
@@ -127,20 +151,19 @@ public class TimeTrackingService {
 
         for (TimeRecord record : records) {
             LocalDateTime time = record.getRegisteredAt();
-            switch (record.getRecordType().name()) {
-                case "ENTRY":
-                case "PAUSE_END":
+            currentStatus = switch (record.getRecordType().name()) {
+                case "ENTRY", "PAUSE_END" -> {
                     lastEntry = time;
-                    currentStatus = "WORKING";
-                    break;
-                case "PAUSE_START":
-                case "EXIT":
+                    yield "WORKING";
+                }
+                case "PAUSE_START", "EXIT" -> {
                     if (lastEntry != null && "WORKING".equals(currentStatus)) {
                         totalSeconds += Duration.between(lastEntry, time).getSeconds();
                     }
-                    currentStatus = "PAUSED_OR_FINISHED";
-                    break;
-            }
+                    yield "PAUSED_OR_FINISHED";
+                }
+                default -> currentStatus;
+            };
         }
 
         if ("WORKING".equals(currentStatus) && lastEntry != null) {

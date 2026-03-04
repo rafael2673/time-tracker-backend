@@ -3,9 +3,13 @@ package com.ap101gamestudio.timetracker.model;
 import com.ap101gamestudio.timetracker.model.enums.RecordSource;
 import com.ap101gamestudio.timetracker.model.enums.RecordType;
 import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+@Getter
 @Entity
 @Table(name = "time_records")
 public class TimeRecord {
@@ -30,12 +34,15 @@ public class TimeRecord {
     @Column(nullable = false)
     private RecordSource source;
 
+    @Setter
     @Column(name = "registered_at", nullable = false)
     private LocalDateTime registeredAt;
 
+    @Setter
     @Column(columnDefinition = "TEXT")
     private String justification;
 
+    @Setter
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "edited_from_id")
     private TimeRecord editedFrom;
@@ -65,12 +72,4 @@ public class TimeRecord {
         this.editedFrom = editedFrom;
     }
 
-    public UUID getId() { return id; }
-    public User getUser() { return user; }
-    public Workspace getWorkspace() { return workspace; }
-    public RecordType getRecordType() { return recordType; }
-    public RecordSource getSource() { return source; }
-    public LocalDateTime getRegisteredAt() { return registeredAt; }
-    public String getJustification() { return justification; }
-    public TimeRecord getEditedFrom() { return editedFrom; }
 }
