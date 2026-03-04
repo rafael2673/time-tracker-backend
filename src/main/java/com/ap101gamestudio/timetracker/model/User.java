@@ -2,6 +2,8 @@ package com.ap101gamestudio.timetracker.model;
 
 import com.ap101gamestudio.timetracker.model.enums.UserRole;
 import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
 import org.jspecify.annotations.NonNull;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -15,6 +17,7 @@ import java.util.UUID;
 @Table(name = "users")
 public class User implements UserDetails {
 
+    @Getter
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -22,25 +25,37 @@ public class User implements UserDetails {
     @Column(nullable = false, unique = true)
     private String email;
 
+    @Setter
     @Column(name = "password_hash")
     private String passwordHash;
 
+    @Getter
     @Column(name = "full_name", nullable = false)
     private String fullName;
 
+    @Getter
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private UserRole role;
 
+    @Getter
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "manager_id")
     private User manager;
 
+    @Getter
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "work_policy_id", nullable = false)
     private WorkPolicy workPolicy;
 
     protected User() {
+    }
+
+    public User(String email, String name, String password, UserRole role) {
+        this.email = email;
+        this.fullName = name;
+        this.role = role;
+        this.passwordHash = password;
     }
 
     public User(String email, String passwordHash, String fullName, UserRole role, User manager, WorkPolicy workPolicy) {
@@ -53,26 +68,6 @@ public class User implements UserDetails {
         this.role = role;
         this.manager = manager;
         this.workPolicy = workPolicy;
-    }
-
-    public UUID getId() {
-        return id;
-    }
-
-    public String getFullName() {
-        return fullName;
-    }
-
-    public UserRole getRole() {
-        return role;
-    }
-
-    public User getManager() {
-        return manager;
-    }
-
-    public WorkPolicy getWorkPolicy() {
-        return workPolicy;
     }
 
     @Override

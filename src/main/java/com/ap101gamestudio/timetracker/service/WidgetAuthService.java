@@ -1,0 +1,44 @@
+package com.ap101gamestudio.timetracker.service;
+
+import com.ap101gamestudio.timetracker.model.enums.UserRole;
+import com.ap101gamestudio.timetracker.model.User;
+import com.ap101gamestudio.timetracker.dto.WidgetLoginRequest;
+import com.ap101gamestudio.timetracker.repository.ApiKeyRepository;
+import com.ap101gamestudio.timetracker.repository.UserRepository;
+import com.ap101gamestudio.timetracker.security.JwtService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+public class WidgetAuthService {
+
+    private final ApiKeyRepository apiKeyRepository;
+    private final UserRepository userRepository;
+    private final JwtService jwtService;
+    private final PasswordEncoder passwordEncoder;
+
+    @Transactional
+    public String authenticateFromWidget(WidgetLoginRequest request) {
+        var apiKey = apiKeyRepository.findByKeyAndActiveTrue(request.apiKey())
+                .orElseThrow(() -> new BadCredentialsException("API Key inválida ou inativa"));
+
+        var user = userRepository.findByEmail(request.email())
+                .orElseGet(() -> createSilentUser(request));
+
+        return jwtService.generateToken(user);
+    }
+
+    private User createSilentUser(WidgetLoginRequest request) {
+        String email = request.email();
+        String name = request.name() != null ? request.name() : request.email().split("@")[0];
+        String password = passwordEncoder.encode(UUID.randomUUID().toString());
+        var user = new User(email, name, password, UserRole.EMPLOYEE);
+        return userRepository.save(user);
+    }
+}
