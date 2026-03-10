@@ -20,7 +20,7 @@
             <column name="source" type="VARCHAR(50)">
                 <constraints nullable="false"/>
             </column>
-            <column name="registered_at" type="TIMESTAMP WITH TIME ZONE">
+            <column name="registered_at" type="DATETIME">
                 <constraints nullable="false"/>
             </column>
             <column name="justification" type="TEXT"/>
