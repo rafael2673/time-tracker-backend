@@ -32,7 +32,7 @@ public class ReportService {
         this.userRepository = userRepository;
     }
 
-    public byte[] generateMonthlyTimesheet(UUID userId, int year, int month) {
+    public byte[] generateMonthlyTimesheet(UUID userId, UUID workspaceId, int year, int month) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new DomainException("error.user.not_found"));
 
@@ -40,7 +40,7 @@ public class ReportService {
         LocalDateTime start = yearMonth.atDay(1).atStartOfDay();
         LocalDateTime end = yearMonth.atEndOfMonth().atTime(23, 59, 59);
 
-        List<TimeRecord> records = recordRepository.findByUserIdAndRegisteredAtBetween(userId, start, end);
+        List<TimeRecord> records = recordRepository.findByUserIdAndWorkspaceIdAndRegisteredAtBetween(userId, workspaceId, start, end);
         Map<LocalDate, List<TimeRecord>> recordsByDay = records.stream()
                 .collect(Collectors.groupingBy(r -> r.getRegisteredAt().toLocalDate()));
 

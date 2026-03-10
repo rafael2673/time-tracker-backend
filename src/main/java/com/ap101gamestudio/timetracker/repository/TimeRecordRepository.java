@@ -10,5 +10,5 @@ import java.util.UUID;
 
 @Repository
 public interface TimeRecordRepository extends JpaRepository<TimeRecord, UUID> {
-    List<TimeRecord> findByUserIdAndRegisteredAtBetween(UUID userId, LocalDateTime start, LocalDateTime end);
+    List<TimeRecord> findByUserIdAndWorkspaceIdAndRegisteredAtBetween(UUID userId, UUID workspaceId, LocalDateTime start, LocalDateTime end);
 }

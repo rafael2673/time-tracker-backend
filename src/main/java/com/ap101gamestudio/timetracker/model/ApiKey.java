@@ -19,4 +19,8 @@ public class ApiKey {
     private String companyName;
 
     private boolean active = true;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "workspace_id", nullable = false)
+    private Workspace workspace;
 }

@@ -41,15 +41,16 @@ public class TimeTrackingService {
         this.workspaceRepository = workspaceRepository;
     }
 
-    public TimeRecordResponse registerPoint(String email, CreateTimeRecordRequest request) {
+    public TimeRecordResponse registerPoint(String email, CreateTimeRecordRequest request, UUID workspaceId) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new DomainException("error.user.not_found"));
 
-        Workspace detectedWorkspace = findWorkspaceByLocation(request.latitude(), request.longitude());
+        Workspace workspace = workspaceRepository.findById(workspaceId)
+                .orElseThrow(() -> new DomainException("error.workspace.not_found"));
 
         TimeRecord record = new TimeRecord(
                 user,
-                detectedWorkspace,
+                workspace,
                 request.recordType(),
                 request.source(),
                 request.registeredAt() != null ? request.registeredAt() : LocalDateTime.now(),
@@ -61,14 +62,16 @@ public class TimeTrackingService {
         return mapToResponse(saved);
     }
 
-    public TimeRecordResponse updateRecord(UUID id, String email, UpdateTimeRecordRequest request) {
+    public TimeRecordResponse updateRecord(UUID id, String email, UpdateTimeRecordRequest request, UUID workspaceId) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new DomainException("error.user.not_found"));
 
         TimeRecord originalRecord = timeRecordRepository.findById(id)
                 .orElseThrow(() -> new DomainException("error.record.not_found"));
 
-        if (!originalRecord.getUser().getId().equals(user.getId())) {
+        if (!originalRecord.getUser().getId().equals(user.getId()) ||
+                originalRecord.getWorkspace() == null ||
+                !originalRecord.getWorkspace().getId().equals(workspaceId)) {
             throw new DomainException("error.permission.denied");
         }
 
@@ -86,14 +89,15 @@ public class TimeTrackingService {
         return mapToResponse(saved);
     }
 
-    public List<TimeRecordResponse> getRecordsByDate(String email, LocalDate date) {
+    public List<TimeRecordResponse> getRecordsByDate(String email, LocalDate date, UUID workspaceId) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new DomainException("error.user.not_found"));
 
         LocalDateTime startOfDay = date.atStartOfDay();
         LocalDateTime endOfDay = date.atTime(23, 59, 59);
 
-        List<TimeRecord> records = timeRecordRepository.findByUserIdAndRegisteredAtBetween(user.getId(), startOfDay, endOfDay);
+        List<TimeRecord> records = timeRecordRepository.findByUserIdAndWorkspaceIdAndRegisteredAtBetween(
+                user.getId(), workspaceId, startOfDay, endOfDay);
         records = filterActiveRecords(records);
 
         return records.stream()
@@ -101,7 +105,7 @@ public class TimeTrackingService {
                 .toList();
     }
 
-    public List<DailySummaryResponse> getWeeklySummary(String email, LocalDate referenceDate) {
+    public List<DailySummaryResponse> getWeeklySummary(String email, LocalDate referenceDate, UUID workspaceId) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new DomainException("error.user.not_found"));
 
@@ -119,7 +123,8 @@ public class TimeTrackingService {
             LocalDateTime startOfDay = currentDate.atStartOfDay();
             LocalDateTime endOfDay = currentDate.atTime(23, 59, 59);
 
-            List<TimeRecord> dailyRecords = timeRecordRepository.findByUserIdAndRegisteredAtBetween(user.getId(), startOfDay, endOfDay);
+            List<TimeRecord> dailyRecords = timeRecordRepository.findByUserIdAndWorkspaceIdAndRegisteredAtBetween(
+                    user.getId(), workspaceId, startOfDay, endOfDay);
             dailyRecords = filterActiveRecords(dailyRecords);
             double hours = calculateWorkedHours(dailyRecords);
 
@@ -174,28 +179,6 @@ public class TimeTrackingService {
         }
 
         return totalSeconds / 3600.0;
-    }
-
-    private Workspace findWorkspaceByLocation(Double lat, Double lon) {
-        if (lat == null || lon == null) return null;
-
-        List<Workspace> allWorkspaces = workspaceRepository.findAll();
-
-        return allWorkspaces.stream()
-                .filter(ws -> calculateDistance(lat, lon, ws.getLatitude(), ws.getLongitude()) <= ws.getRadiusMeters())
-                .findFirst()
-                .orElse(null);
-    }
-
-    private double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
-        final int R = 6371000;
-        double latDistance = Math.toRadians(lat2 - lat1);
-        double lonDistance = Math.toRadians(lon2 - lon1);
-        double a = Math.sin(latDistance / 2) * Math.sin(latDistance / 2)
-                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
-                * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
-        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
     }
 
     private TimeRecordResponse mapToResponse(TimeRecord saved) {

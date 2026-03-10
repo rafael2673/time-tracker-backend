@@ -11,5 +11,6 @@
     <include file="db/changelog/changes/04-create-time-records.xml"/>
     <include file="db/changelog/changes/05-create-api-keys.xml"/>
     <include file="db/changelog/changes/06-create-link-codes.xml"/>
+    <include file="db/changelog/changes/07-add-workspace-to-api-keys.xml"/>
 
 </databaseChangeLog>

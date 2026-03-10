@@ -14,6 +14,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -34,7 +36,10 @@ public class WidgetAuthService {
         var user = userRepository.findByEmail(request.email())
                 .orElseGet(() -> createSilentUser(request));
 
-        return jwtService.generateToken(user);
+        Map<String, Object> extraClaims = new HashMap<>();
+        extraClaims.put("workspaceId", apiKey.getWorkspace().getId().toString());
+
+        return jwtService.generateToken(extraClaims, user);
     }
 
     private User createSilentUser(WidgetLoginRequest request) {
@@ -43,7 +48,7 @@ public class WidgetAuthService {
         String email = request.email();
         String name = request.name() != null ? request.name() : request.email().split("@")[0];
         String password = passwordEncoder.encode(UUID.randomUUID().toString());
-        var user = new User(email, name, password, UserRole.EMPLOYEE,null, defaultPolicy);
+        var user = new User(email, name, password, UserRole.EMPLOYEE, null, defaultPolicy);
         return userRepository.save(user);
     }
 }
