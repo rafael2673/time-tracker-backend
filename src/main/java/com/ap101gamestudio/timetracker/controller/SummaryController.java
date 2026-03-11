@@ -1,6 +1,8 @@
 package com.ap101gamestudio.timetracker.controller;
 
 import com.ap101gamestudio.timetracker.dto.DailySummaryResponse;
+import com.ap101gamestudio.timetracker.dto.MonthSummaryResponse;
+import com.ap101gamestudio.timetracker.dto.MonthlyBalanceResponse;
 import com.ap101gamestudio.timetracker.security.JwtService;
 import com.ap101gamestudio.timetracker.service.TimeTrackingService;
 import org.springframework.http.ResponseEntity;
@@ -36,5 +38,41 @@ public class SummaryController {
 
         List<DailySummaryResponse> response = timeTrackingService.getWeeklySummary(email, referenceDate, workspaceId);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/years")
+    public ResponseEntity<List<Integer>> getAvailableYears(
+            @RequestHeader("Authorization") String authHeader,
+            Authentication authentication
+    ) {
+        String email = authentication.getName();
+        String token = authHeader.substring(7);
+        UUID workspaceId = UUID.fromString(jwtService.extractWorkspaceId(token));
+        return ResponseEntity.ok(timeTrackingService.getAvailableYears(email, workspaceId));
+    }
+
+    @GetMapping("/yearly")
+    public ResponseEntity<List<MonthSummaryResponse>> getYearlySummary(
+            @RequestParam int year,
+            @RequestHeader("Authorization") String authHeader,
+            Authentication authentication
+    ) {
+        String email = authentication.getName();
+        String token = authHeader.substring(7);
+        UUID workspaceId = UUID.fromString(jwtService.extractWorkspaceId(token));
+        return ResponseEntity.ok(timeTrackingService.getYearlySummary(email, year, workspaceId));
+    }
+
+    @GetMapping("/monthly-balance")
+    public ResponseEntity<MonthlyBalanceResponse> getMonthlyBalance(
+            @RequestParam int year,
+            @RequestParam int month,
+            @RequestHeader("Authorization") String authHeader,
+            Authentication authentication
+    ) {
+        String email = authentication.getName();
+        String token = authHeader.substring(7);
+        UUID workspaceId = UUID.fromString(jwtService.extractWorkspaceId(token));
+        return ResponseEntity.ok(timeTrackingService.getMonthlyBalance(email, year, month, workspaceId));
     }
 }

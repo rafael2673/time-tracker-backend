@@ -1,9 +1,6 @@
 package com.ap101gamestudio.timetracker.service;
 
-import com.ap101gamestudio.timetracker.dto.CreateTimeRecordRequest;
-import com.ap101gamestudio.timetracker.dto.DailySummaryResponse;
-import com.ap101gamestudio.timetracker.dto.TimeRecordResponse;
-import com.ap101gamestudio.timetracker.dto.UpdateTimeRecordRequest;
+import com.ap101gamestudio.timetracker.dto.*;
 import com.ap101gamestudio.timetracker.exceptions.DomainException;
 import com.ap101gamestudio.timetracker.model.TimeRecord;
 import com.ap101gamestudio.timetracker.model.User;
@@ -18,6 +15,7 @@ import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -132,6 +130,73 @@ public class TimeTrackingService {
         }
 
         return weeklySummary;
+    }
+
+    public List<Integer> getAvailableYears(String email, UUID workspaceId) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new DomainException("error.user.not_found"));
+
+        List<Integer> years = timeRecordRepository.findAvailableYears(user.getId(), workspaceId);
+        if (years.isEmpty()) {
+            years.add(LocalDate.now().getYear());
+        }
+        return years;
+    }
+
+    public List<MonthSummaryResponse> getYearlySummary(String email, int year, UUID workspaceId) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new DomainException("error.user.not_found"));
+
+        LocalDateTime startOfYear = LocalDateTime.of(year, 1, 1, 0, 0);
+        LocalDateTime endOfYear = LocalDateTime.of(year, 12, 31, 23, 59, 59);
+
+        List<TimeRecord> records = timeRecordRepository.findByUserIdAndWorkspaceIdAndRegisteredAtBetween(
+                user.getId(), workspaceId, startOfYear, endOfYear);
+        records = filterActiveRecords(records);
+
+        String[] monthNames = {"Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"};
+        List<MonthSummaryResponse> summary = new ArrayList<>();
+
+        for (int i = 1; i <= 12; i++) {
+            final int currentMonth = i;
+            List<TimeRecord> monthRecords = records.stream()
+                    .filter(r -> r.getRegisteredAt().getMonthValue() == currentMonth)
+                    .toList();
+            double hours = calculateWorkedHours(monthRecords);
+            summary.add(new MonthSummaryResponse(currentMonth, monthNames[currentMonth - 1], hours));
+        }
+
+        return summary;
+    }
+
+    public MonthlyBalanceResponse getMonthlyBalance(String email, int year, int month, UUID workspaceId) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new DomainException("error.user.not_found"));
+
+        YearMonth ym = YearMonth.of(year, month);
+        LocalDateTime startOfMonth = ym.atDay(1).atStartOfDay();
+        LocalDateTime endOfMonth = ym.atEndOfMonth().atTime(23, 59, 59);
+
+        List<TimeRecord> records = timeRecordRepository.findByUserIdAndWorkspaceIdAndRegisteredAtBetween(
+                user.getId(), workspaceId, startOfMonth, endOfMonth);
+        records = filterActiveRecords(records);
+
+        double workedHours = calculateWorkedHours(records);
+
+        List<DayOfWeek> workingDays = user.getWorkPolicy().getWorkingDaysList();
+        int workDays = 0;
+        for (int i = 1; i <= ym.lengthOfMonth(); i++) {
+            DayOfWeek day = ym.atDay(i).getDayOfWeek();
+            if (workingDays.contains(day)) {
+                workDays++;
+            }
+        }
+
+        double dailyExpectedHours = user.getWorkPolicy().getDailyMinutesLimit() / 60.0;
+        double expectedHours = workDays * dailyExpectedHours;
+        double balance = workedHours - expectedHours;
+
+        return new MonthlyBalanceResponse(workedHours, expectedHours, balance);
     }
 
     private List<TimeRecord> filterActiveRecords(List<TimeRecord> records) {

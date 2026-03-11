@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <changeSet id="08-add-working-days-to-policies" author="rafael">
+        <addColumn tableName="work_policies">
+            <column name="working_days" type="VARCHAR(255)" defaultValue="MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY"/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>
