@@ -4,6 +4,7 @@ import com.ap101gamestudio.timetracker.model.WorkPolicy;
 import com.ap101gamestudio.timetracker.model.enums.UserRole;
 import com.ap101gamestudio.timetracker.model.User;
 import com.ap101gamestudio.timetracker.dto.WidgetLoginRequest;
+import com.ap101gamestudio.timetracker.exceptions.DomainException;
 import com.ap101gamestudio.timetracker.repository.ApiKeyRepository;
 import com.ap101gamestudio.timetracker.repository.UserRepository;
 import com.ap101gamestudio.timetracker.repository.WorkPolicyRepository;
@@ -31,7 +32,11 @@ public class WidgetAuthService {
     @Transactional
     public String authenticateFromWidget(WidgetLoginRequest request) {
         var apiKey = apiKeyRepository.findByKeyAndActiveTrue(request.apiKey())
-                .orElseThrow(() -> new BadCredentialsException("API Key inválida ou inativa"));
+                .orElseThrow(() -> new BadCredentialsException("error.api_key.invalid"));
+
+        if (apiKey.getWorkspace() == null) {
+            throw new DomainException("error.api_key.no_workspace");
+        }
 
         var user = userRepository.findByEmail(request.email())
                 .orElseGet(() -> createSilentUser(request));
@@ -44,11 +49,13 @@ public class WidgetAuthService {
 
     private User createSilentUser(WidgetLoginRequest request) {
         WorkPolicy defaultPolicy = workPolicyRepository.findAll().stream().findFirst()
-                .orElseThrow(() -> new RuntimeException("Nenhuma WorkPolicy encontrada no banco de dados para vincular ao novo usuário."));
+                .orElseThrow(() -> new DomainException("error.work_policy.not_found"));
+
         String email = request.email();
-        String name = request.name() != null ? request.name() : request.email().split("@")[0];
+        String name = (request.name() != null && !request.name().isBlank()) ? request.name() : request.email().split("@")[0];
         String password = passwordEncoder.encode(UUID.randomUUID().toString());
         var user = new User(email, name, password, UserRole.EMPLOYEE, null, defaultPolicy);
+
         return userRepository.save(user);
     }
 }
