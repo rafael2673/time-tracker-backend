@@ -4,6 +4,7 @@ import com.ap101gamestudio.timetracker.dto.*;
 import com.ap101gamestudio.timetracker.exceptions.DomainException;
 import com.ap101gamestudio.timetracker.model.TimeRecord;
 import com.ap101gamestudio.timetracker.model.User;
+import com.ap101gamestudio.timetracker.model.WorkPolicy;
 import com.ap101gamestudio.timetracker.model.Workspace;
 import com.ap101gamestudio.timetracker.model.enums.RecordSource;
 import com.ap101gamestudio.timetracker.repository.TimeRecordRepository;
@@ -182,21 +183,36 @@ public class TimeTrackingService {
         records = filterActiveRecords(records);
 
         double workedHours = calculateWorkedHours(records);
+        double expectedHours = calculateExpectedHours(ym, user.getWorkPolicy());
+        double balance = workedHours - expectedHours;
 
-        List<DayOfWeek> workingDays = user.getWorkPolicy().getWorkingDaysList();
-        int workDays = 0;
-        for (int i = 1; i <= ym.lengthOfMonth(); i++) {
-            DayOfWeek day = ym.atDay(i).getDayOfWeek();
-            if (workingDays.contains(day)) {
+        return new MonthlyBalanceResponse(workedHours, expectedHours, balance);
+    }
+
+    private double calculateExpectedHours(YearMonth yearMonth, WorkPolicy policy) {
+        LocalDate today = LocalDate.now();
+        LocalDate lastDayToCount = resolveLastDayToCount(yearMonth, today);
+        List<DayOfWeek> workingDays = policy.getWorkingDaysList();
+
+        long workDays = 0;
+        for (int i = 1; i <= yearMonth.lengthOfMonth(); i++) {
+            LocalDate day = yearMonth.atDay(i);
+            if (!day.isAfter(lastDayToCount) && workingDays.contains(day.getDayOfWeek())) {
                 workDays++;
             }
         }
 
-        double dailyExpectedHours = user.getWorkPolicy().getDailyMinutesLimit() / 60.0;
-        double expectedHours = workDays * dailyExpectedHours;
-        double balance = workedHours - expectedHours;
+        return workDays * (policy.getDailyMinutesLimit() / 60.0);
+    }
 
-        return new MonthlyBalanceResponse(workedHours, expectedHours, balance);
+    private LocalDate resolveLastDayToCount(YearMonth yearMonth, LocalDate today) {
+        if (yearMonth.atDay(1).isAfter(today)) {
+            return yearMonth.atDay(1).minusDays(1);
+        }
+        if (yearMonth.atEndOfMonth().isBefore(today)) {
+            return yearMonth.atEndOfMonth();
+        }
+        return today;
     }
 
     private List<TimeRecord> filterActiveRecords(List<TimeRecord> records) {
