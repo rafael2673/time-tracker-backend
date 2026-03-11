@@ -6,9 +6,11 @@ import com.ap101gamestudio.timetracker.model.TimeRecord;
 import com.ap101gamestudio.timetracker.model.User;
 import com.ap101gamestudio.timetracker.model.WorkPolicy;
 import com.ap101gamestudio.timetracker.model.Workspace;
+import com.ap101gamestudio.timetracker.model.WorkspaceMembership;
 import com.ap101gamestudio.timetracker.model.enums.RecordSource;
 import com.ap101gamestudio.timetracker.repository.TimeRecordRepository;
 import com.ap101gamestudio.timetracker.repository.UserRepository;
+import com.ap101gamestudio.timetracker.repository.WorkspaceMembershipRepository;
 import com.ap101gamestudio.timetracker.repository.WorkspaceRepository;
 import org.springframework.stereotype.Service;
 
@@ -29,15 +31,18 @@ public class TimeTrackingService {
     private final TimeRecordRepository timeRecordRepository;
     private final UserRepository userRepository;
     private final WorkspaceRepository workspaceRepository;
+    private final WorkspaceMembershipRepository membershipRepository;
 
     public TimeTrackingService(
             TimeRecordRepository timeRecordRepository,
             UserRepository userRepository,
-            WorkspaceRepository workspaceRepository
+            WorkspaceRepository workspaceRepository,
+            WorkspaceMembershipRepository membershipRepository
     ) {
         this.timeRecordRepository = timeRecordRepository;
         this.userRepository = userRepository;
         this.workspaceRepository = workspaceRepository;
+        this.membershipRepository = membershipRepository;
     }
 
     public TimeRecordResponse registerPoint(String email, CreateTimeRecordRequest request, UUID workspaceId) {
@@ -174,6 +179,9 @@ public class TimeTrackingService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new DomainException("error.user.not_found"));
 
+        WorkspaceMembership membership = membershipRepository.findByUserIdAndWorkspaceId(user.getId(), workspaceId)
+                .orElseThrow(() -> new DomainException("error.permission.denied"));
+
         YearMonth ym = YearMonth.of(year, month);
         LocalDateTime startOfMonth = ym.atDay(1).atStartOfDay();
         LocalDateTime endOfMonth = ym.atEndOfMonth().atTime(23, 59, 59);
@@ -183,7 +191,7 @@ public class TimeTrackingService {
         records = filterActiveRecords(records);
 
         double workedHours = calculateWorkedHours(records);
-        double expectedHours = calculateExpectedHours(ym, user.getWorkPolicy());
+        double expectedHours = calculateExpectedHours(ym, membership.getWorkPolicy());
         double balance = workedHours - expectedHours;
 
         return new MonthlyBalanceResponse(workedHours, expectedHours, balance);

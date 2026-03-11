@@ -1,5 +1,7 @@
 package com.ap101gamestudio.timetracker.service;
 
+import com.ap101gamestudio.timetracker.model.Workspace;
+import com.ap101gamestudio.timetracker.model.WorkspaceMembership;
 import com.ap101gamestudio.timetracker.model.WorkPolicy;
 import com.ap101gamestudio.timetracker.model.enums.UserRole;
 import com.ap101gamestudio.timetracker.model.User;
@@ -8,6 +10,7 @@ import com.ap101gamestudio.timetracker.exceptions.DomainException;
 import com.ap101gamestudio.timetracker.repository.ApiKeyRepository;
 import com.ap101gamestudio.timetracker.repository.UserRepository;
 import com.ap101gamestudio.timetracker.repository.WorkPolicyRepository;
+import com.ap101gamestudio.timetracker.repository.WorkspaceMembershipRepository;
 import com.ap101gamestudio.timetracker.security.JwtService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -26,6 +29,7 @@ public class WidgetAuthService {
     private final ApiKeyRepository apiKeyRepository;
     private final UserRepository userRepository;
     private final WorkPolicyRepository workPolicyRepository;
+    private final WorkspaceMembershipRepository membershipRepository;
     private final JwtService jwtService;
     private final PasswordEncoder passwordEncoder;
 
@@ -38,24 +42,28 @@ public class WidgetAuthService {
             throw new DomainException("error.api_key.no_workspace");
         }
 
+        Workspace workspace = apiKey.getWorkspace();
+
         var user = userRepository.findByEmail(request.email())
-                .orElseGet(() -> createSilentUser(request));
+                .orElseGet(() -> createSilentUser(request, workspace));
+
+        if (membershipRepository.findByUserIdAndWorkspaceId(user.getId(), workspace.getId()).isEmpty()) {
+            WorkPolicy defaultPolicy = workPolicyRepository.findAll().stream().findFirst()
+                    .orElseThrow(() -> new DomainException("error.work_policy.not_found"));
+            membershipRepository.save(new WorkspaceMembership(user, workspace, UserRole.EMPLOYEE, defaultPolicy));
+        }
 
         Map<String, Object> extraClaims = new HashMap<>();
-        extraClaims.put("workspaceId", apiKey.getWorkspace().getId().toString());
+        extraClaims.put("workspaceId", workspace.getId().toString());
 
         return jwtService.generateToken(extraClaims, user);
     }
 
-    private User createSilentUser(WidgetLoginRequest request) {
-        WorkPolicy defaultPolicy = workPolicyRepository.findAll().stream().findFirst()
-                .orElseThrow(() -> new DomainException("error.work_policy.not_found"));
-
+    private User createSilentUser(WidgetLoginRequest request, Workspace workspace) {
         String email = request.email();
         String name = (request.name() != null && !request.name().isBlank()) ? request.name() : request.email().split("@")[0];
         String password = passwordEncoder.encode(UUID.randomUUID().toString());
-        var user = new User(email, name, password, UserRole.EMPLOYEE, null, defaultPolicy);
 
-        return userRepository.save(user);
+        return userRepository.save(new User(email, password, name));
     }
 }

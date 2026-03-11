@@ -8,11 +8,8 @@ import com.ap101gamestudio.timetracker.dto.LinkAccountRequest;
 import com.ap101gamestudio.timetracker.exceptions.DomainException;
 import com.ap101gamestudio.timetracker.model.LinkCode;
 import com.ap101gamestudio.timetracker.model.User;
-import com.ap101gamestudio.timetracker.model.enums.UserRole;
-import com.ap101gamestudio.timetracker.model.WorkPolicy;
 import com.ap101gamestudio.timetracker.repository.LinkCodeRepository;
 import com.ap101gamestudio.timetracker.repository.UserRepository;
-import com.ap101gamestudio.timetracker.repository.WorkPolicyRepository;
 import com.ap101gamestudio.timetracker.security.JwtService;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -27,7 +24,6 @@ import java.time.LocalDateTime;
 public class AuthenticationService {
 
     private final UserRepository userRepository;
-    private final WorkPolicyRepository workPolicyRepository;
     private final LinkCodeRepository linkCodeRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
@@ -35,14 +31,12 @@ public class AuthenticationService {
 
     public AuthenticationService(
             UserRepository userRepository,
-            WorkPolicyRepository workPolicyRepository,
             LinkCodeRepository linkCodeRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
             AuthenticationManager authenticationManager
     ) {
         this.userRepository = userRepository;
-        this.workPolicyRepository = workPolicyRepository;
         this.linkCodeRepository = linkCodeRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
@@ -55,16 +49,10 @@ public class AuthenticationService {
             throw new DomainException("error.email.already.in.use");
         }
 
-        WorkPolicy policy = workPolicyRepository.findById(request.workPolicyId())
-                .orElseThrow(() -> new DomainException("error.work.policy.not_found"));
-
         var user = new User(
                 request.email(),
                 passwordEncoder.encode(request.password()),
-                request.fullName(),
-                UserRole.EMPLOYEE,
-                null,
-                policy
+                request.fullName()
         );
 
         userRepository.save(user);
