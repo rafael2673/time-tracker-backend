@@ -1,28 +1,18 @@
 package com.ap101gamestudio.timetracker.model;
 
-public class WorkPolicyTest {
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
-    public void shouldThrowExceptionWhenNameIsBlank() {
-        boolean exceptionThrown = false;
-        try {
-            new WorkPolicy("", 480, 10);
-        } catch (IllegalArgumentException e) {
-            exceptionThrown = true;
-        }
-        if (!exceptionThrown) {
-            throw new AssertionError("Expected IllegalArgumentException for blank name");
-        }
+class WorkPolicyTest {
+
+    @Test
+    void shouldThrowExceptionWhenNameIsBlank() {
+        Assertions.assertThrows(IllegalArgumentException.class, () -> new WorkPolicy("", 480, 10));
     }
 
-    public void shouldCreateWorkPolicySuccessfully() {
+    @Test
+    void shouldCreateWorkPolicySuccessfully() {
         WorkPolicy policy = new WorkPolicy("Standard CLT", 480, 10);
-        if (!"Standard CLT".equals(policy.getName())) {
-            throw new AssertionError("Policy name mismatch");
-        }
-    }
-
-    public void runAll() {
-        shouldThrowExceptionWhenNameIsBlank();
-        shouldCreateWorkPolicySuccessfully();
+        Assertions.assertEquals("Standard CLT", policy.getName());
     }
 }

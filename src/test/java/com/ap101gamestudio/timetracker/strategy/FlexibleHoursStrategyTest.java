@@ -19,7 +19,7 @@ class FlexibleHoursStrategyTest {
     @Test
     void shouldReturnZeroOvertimeWhenHoursAreWithinTolerance() {
         WorkPolicy policy = new WorkPolicy("Standard", 480, 10);
-        User user = new User("test@test.com", "hash", "Test User", null, null, policy);
+        User user = new User("test@test.com", "hash", "Test User");
         LocalDateTime date = LocalDateTime.of(2026, 2, 23, 0, 0);
 
         List<TimeRecord> records = List.of(
@@ -37,7 +37,7 @@ class FlexibleHoursStrategyTest {
     @Test
     void shouldReturnPositiveOvertimeWhenHoursExceedTolerance() {
         WorkPolicy policy = new WorkPolicy("Standard", 480, 10);
-        User user = new User("test@test.com", "hash", "Test User", null, null, policy);
+        User user = new User("test@test.com", "hash", "Test User");
         LocalDateTime date = LocalDateTime.of(2026, 2, 23, 0, 0);
 
         List<TimeRecord> records = List.of(
@@ -55,7 +55,7 @@ class FlexibleHoursStrategyTest {
     @Test
     void shouldIgnoreIncompletePairs() {
         WorkPolicy policy = new WorkPolicy("Standard", 480, 10);
-        User user = new User("test@test.com", "hash", "Test User", null, null, policy);
+        User user = new User("test@test.com", "hash", "Test User");
         LocalDateTime date = LocalDateTime.of(2026, 2, 23, 0, 0);
 
         List<TimeRecord> records = List.of(
