@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <changeSet id="12-add-workspace-to-work-policies" author="rafael">
+        <addColumn tableName="work_policies">
+            <column name="workspace_id" type="UUID"/>
+        </addColumn>
+        <addForeignKeyConstraint baseTableName="work_policies" baseColumnNames="workspace_id" constraintName="fk_work_policy_workspace" referencedTableName="workspaces" referencedColumnNames="id"/>
+    </changeSet>
+
+</databaseChangeLog>

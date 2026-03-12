@@ -27,12 +27,23 @@ public class User implements UserDetails {
     private String passwordHash;
 
     @Getter
+    @Setter
     @Column(name = "full_name", nullable = false)
     private String fullName;
 
     @Getter
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<WorkspaceMembership> memberships;
+
+    @Getter
+    @Setter
+    @Column(name = "recovery_email", unique = true)
+    private String recoveryEmail;
+
+    @Getter
+    @Setter
+    @Column(name = "has_web_password", nullable = false)
+    private boolean hasWebPassword = false;
 
     protected User() {}
 
