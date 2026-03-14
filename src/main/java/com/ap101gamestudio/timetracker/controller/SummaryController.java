@@ -32,11 +32,12 @@ public class SummaryController {
     @GetMapping("/weekly")
     public ResponseEntity<List<DailySummaryResponse>> getWeeklySummary(
             @RequestParam String date,
+            @RequestHeader("Accept-Language") String locale,
             @RequestHeader("X-Workspace-Id") UUID workspaceId,
             Authentication authentication
     ) {
         LocalDate referenceDate = LocalDate.parse(date);
-        List<DailySummaryResponse> response = timeTrackingService.getWeeklySummary(authentication.getName(), referenceDate, workspaceId);
+        List<DailySummaryResponse> response = timeTrackingService.getWeeklySummary(authentication.getName(), referenceDate, workspaceId, locale);
         return ResponseEntity.ok(response);
     }
 
@@ -51,10 +52,11 @@ public class SummaryController {
     @GetMapping("/yearly")
     public ResponseEntity<List<MonthSummaryResponse>> getYearlySummary(
             @RequestParam int year,
+            @RequestHeader("Accept-Language") String locale,
             @RequestHeader("X-Workspace-Id") UUID workspaceId,
             Authentication authentication
     ) {
-        return ResponseEntity.ok(timeTrackingService.getYearlySummary(authentication.getName(), year, workspaceId));
+        return ResponseEntity.ok(timeTrackingService.getYearlySummary(authentication.getName(), year, workspaceId, locale));
     }
 
     @GetMapping("/monthly-balance")
@@ -73,6 +75,16 @@ public class SummaryController {
             @PathVariable UUID employeeId,
             Authentication authentication
     ) {
-        return ResponseEntity.ok(summaryService.getEmployeeSummary(authentication.getName(), workspaceId, employeeId));
+        return ResponseEntity.ok(summaryService.getEmployeeSummary(authentication.getName(), employeeId, workspaceId));
+    }
+
+    @GetMapping("/quarterly-balance")
+    public ResponseEntity<MonthlyBalanceResponse> getQuarterlyBalance(
+            @RequestParam int year,
+            @RequestParam int quarter,
+            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(timeTrackingService.getQuarterlyBalance(authentication.getName(), year, quarter, workspaceId));
     }
 }

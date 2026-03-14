@@ -69,4 +69,14 @@ public class TimeRecordController {
         List<TimeRecordResponse> response = timeTrackingService.getRecordsByDate(email, targetDate, workspaceId);
         return ResponseEntity.ok(response);
     }
+
+    @GetMapping("/daily")
+    public ResponseEntity<List<TimeRecordResponse>> getDailyRecords(
+            @RequestParam UUID userId,
+            @RequestParam LocalDate date,
+            @RequestHeader("X-Workspace-Id") UUID workspaceId
+    ) {
+        List<TimeRecordResponse> response = timeTrackingService.getRecordsByUserIdAndDate(userId, date, workspaceId);
+        return ResponseEntity.ok(response);
+    }
 }

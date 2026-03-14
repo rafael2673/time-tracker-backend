@@ -12,6 +12,7 @@ import com.ap101gamestudio.timetracker.repository.TimeRecordRepository;
 import com.ap101gamestudio.timetracker.repository.UserRepository;
 import com.ap101gamestudio.timetracker.repository.WorkspaceMembershipRepository;
 import com.ap101gamestudio.timetracker.repository.WorkspaceRepository;
+import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -22,10 +23,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 public class TimeTrackingService {
@@ -34,17 +32,21 @@ public class TimeTrackingService {
     private final UserRepository userRepository;
     private final WorkspaceRepository workspaceRepository;
     private final WorkspaceMembershipRepository membershipRepository;
+    private MessageSource messageSource;
+
 
     public TimeTrackingService(
             TimeRecordRepository timeRecordRepository,
             UserRepository userRepository,
             WorkspaceRepository workspaceRepository,
-            WorkspaceMembershipRepository membershipRepository
+            WorkspaceMembershipRepository membershipRepository,
+            MessageSource messageSource
     ) {
         this.timeRecordRepository = timeRecordRepository;
         this.userRepository = userRepository;
         this.workspaceRepository = workspaceRepository;
         this.membershipRepository = membershipRepository;
+        this.messageSource = messageSource;
     }
 
     public TimeRecordResponse registerPoint(String email, CreateTimeRecordRequest request, UUID workspaceId) {
@@ -111,9 +113,12 @@ public class TimeTrackingService {
                 .toList();
     }
 
-    public List<DailySummaryResponse> getWeeklySummary(String email, LocalDate referenceDate, UUID workspaceId) {
+    public List<DailySummaryResponse> getWeeklySummary(String email, LocalDate referenceDate, UUID workspaceId, String localeString) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new DomainException("error.user.not_found"));
+
+        WorkspaceMembership membership = membershipRepository.findByUserIdAndWorkspaceId(user.getId(), workspaceId)
+                .orElseThrow(() -> new DomainException("error.permission.denied"));
 
         LocalDate startOfWeek = referenceDate;
         while (startOfWeek.getDayOfWeek() != DayOfWeek.SUNDAY) {
@@ -122,7 +127,10 @@ public class TimeTrackingService {
 
         List<DailySummaryResponse> weeklySummary = new ArrayList<>();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-        String[] dayNames = {"Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"};
+        Locale locale = Locale.forLanguageTag(localeString);
+        String[] dayNames = getDayNames(locale);
+        List<DayOfWeek> workingDays = membership.getWorkPolicy().getWorkingDaysList();
+        double dailyLimitHours = membership.getWorkPolicy().getDailyMinutesLimit() / 60.0;
 
         for (int i = 0; i < 7; i++) {
             LocalDate currentDate = startOfWeek.plusDays(i);
@@ -134,10 +142,33 @@ public class TimeTrackingService {
             dailyRecords = filterActiveRecords(dailyRecords);
             double hours = roundHours(calculateWorkedHours(dailyRecords));
 
-            weeklySummary.add(new DailySummaryResponse(dayNames[i], hours, currentDate.format(formatter)));
+            double expectedHoursForDay = workingDays.contains(currentDate.getDayOfWeek()) ? dailyLimitHours : 0.0;
+
+            weeklySummary.add(new DailySummaryResponse(dayNames[i], hours, expectedHoursForDay, currentDate.format(formatter)));
         }
 
         return weeklySummary;
+    }
+
+    public MonthlyBalanceResponse getQuarterlyBalance(String email, int year, int quarter, UUID workspaceId) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new DomainException("error.user.not_found"));
+
+        int startMonth = (quarter - 1) * 3 + 1;
+        int endMonth = startMonth + 2;
+
+        double totalWorked = 0;
+        double totalExpected = 0;
+
+        for(int m = startMonth; m <= endMonth; m++) {
+            MonthlyBalanceResponse monthly = getMonthlyBalance(email, year, m, workspaceId);
+            totalWorked += monthly.workedHours();
+            totalExpected += monthly.expectedHours();
+        }
+
+        double finalBalance = roundHours(totalWorked - totalExpected);
+
+        return new MonthlyBalanceResponse(roundHours(totalWorked), roundHours(totalExpected), finalBalance);
     }
 
     public List<Integer> getAvailableYears(String email, UUID workspaceId) {
@@ -151,9 +182,12 @@ public class TimeTrackingService {
         return years;
     }
 
-    public List<MonthSummaryResponse> getYearlySummary(String email, int year, UUID workspaceId) {
+    public List<MonthSummaryResponse> getYearlySummary(String email, int year, UUID workspaceId, String localeString) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new DomainException("error.user.not_found"));
+
+        WorkspaceMembership membership = membershipRepository.findByUserIdAndWorkspaceId(user.getId(), workspaceId)
+                .orElseThrow(() -> new DomainException("error.permission.denied"));
 
         LocalDateTime startOfYear = LocalDateTime.of(year, 1, 1, 0, 0);
         LocalDateTime endOfYear = LocalDateTime.of(year, 12, 31, 23, 59, 59);
@@ -161,8 +195,8 @@ public class TimeTrackingService {
         List<TimeRecord> records = timeRecordRepository.findByUserIdAndWorkspaceIdAndRegisteredAtBetween(
                 user.getId(), workspaceId, startOfYear, endOfYear);
         records = filterActiveRecords(records);
-
-        String[] monthNames = {"Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"};
+        Locale locale = Locale.forLanguageTag(localeString);
+        String[] monthNames = getMonthNames(locale);
         List<MonthSummaryResponse> summary = new ArrayList<>();
 
         for (int i = 1; i <= 12; i++) {
@@ -171,7 +205,11 @@ public class TimeTrackingService {
                     .filter(r -> r.getRegisteredAt().getMonthValue() == currentMonth)
                     .toList();
             double hours = roundHours(calculateWorkedHours(monthRecords));
-            summary.add(new MonthSummaryResponse(currentMonth, monthNames[currentMonth - 1], hours));
+
+            YearMonth ym = YearMonth.of(year, currentMonth);
+            double expectedHours = roundHours(calculateExpectedHours(ym, membership.getWorkPolicy()));
+
+            summary.add(new MonthSummaryResponse(currentMonth, monthNames[currentMonth - 1], hours, expectedHours));
         }
 
         return summary;
@@ -294,5 +332,32 @@ public class TimeTrackingService {
                 saved.getRegisteredAt(),
                 saved.getJustification()
         );
+    }
+
+    public long countJustificationsPending(UUID employeeId, UUID workspaceId){
+        return timeRecordRepository.countByUserIdAndWorkspaceIdAndPendingApprovationIsTrue(employeeId, workspaceId);
+    }
+
+    public List<TimeRecordResponse> getRecordsByUserIdAndDate(UUID employeeId, LocalDate date, UUID workspaceId) {
+        LocalDateTime startOfDay = date.atStartOfDay();
+        LocalDateTime endOfDay = date.atTime(23, 59, 59);
+
+        List<TimeRecord> records = timeRecordRepository.findByUserIdAndWorkspaceIdAndRegisteredAtBetween(
+                employeeId, workspaceId, startOfDay, endOfDay);
+        records = filterActiveRecords(records);
+
+        return records.stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    public String[] getMonthNames(Locale locale) {
+        String rawNames = messageSource.getMessage("month.names.abrev", null, locale);
+        return rawNames.split(",");
+    }
+
+    public String[] getDayNames(Locale locale) {
+        String rawNames = messageSource.getMessage("day.names.abrev", null, locale);
+        return rawNames.split(",");
     }
 }
