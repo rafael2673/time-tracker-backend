@@ -49,4 +49,14 @@ public class WorkPolicyController {
     ) {
         return ResponseEntity.ok(service.updatePolicy(authentication.getName(), workspaceId, id, request));
     }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(
+            Authentication authentication,
+            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @PathVariable UUID id
+    ) {
+        service.deletePolicy(authentication.getName(), workspaceId, id);
+        return ResponseEntity.noContent().build();
+    }
 }

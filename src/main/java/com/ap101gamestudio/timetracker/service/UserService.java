@@ -5,8 +5,6 @@ import com.ap101gamestudio.timetracker.dto.UpdateProfileRequest;
 import com.ap101gamestudio.timetracker.exceptions.DomainException;
 import com.ap101gamestudio.timetracker.model.LinkCode;
 import com.ap101gamestudio.timetracker.model.User;
-import com.ap101gamestudio.timetracker.model.WorkspaceMembership;
-import com.ap101gamestudio.timetracker.model.enums.UserRole;
 import com.ap101gamestudio.timetracker.repository.LinkCodeRepository;
 import com.ap101gamestudio.timetracker.repository.UserRepository;
 import com.ap101gamestudio.timetracker.repository.WorkspaceMembershipRepository;
@@ -25,17 +23,20 @@ public class UserService {
     private final LinkCodeRepository linkCodeRepository;
     private final WorkspaceMembershipRepository membershipRepository;
     private final PasswordEncoder passwordEncoder;
+    private final WorkspaceService workspaceService;
 
     public UserService(
             UserRepository userRepository,
             LinkCodeRepository linkCodeRepository,
             WorkspaceMembershipRepository membershipRepository,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            WorkspaceService workspaceService
     ) {
         this.userRepository = userRepository;
         this.linkCodeRepository = linkCodeRepository;
         this.membershipRepository = membershipRepository;
         this.passwordEncoder = passwordEncoder;
+        this.workspaceService = workspaceService;
     }
 
     @Transactional
@@ -77,15 +78,7 @@ public class UserService {
 
     @Transactional
     public GenerateLinkCodeResponse generateCodeForEmployee(String managerEmail, UUID employeeId, UUID workspaceId) {
-        User manager = userRepository.findByEmail(managerEmail)
-                .orElseThrow(() -> new DomainException("error.user.not_found"));
-
-        WorkspaceMembership managerMembership = membershipRepository.findByUserIdAndWorkspaceId(manager.getId(), workspaceId)
-                .orElseThrow(() -> new DomainException("error.permission.denied"));
-
-        if (managerMembership.getRole() != UserRole.MANAGER && managerMembership.getRole() != UserRole.ADMIN) {
-            throw new DomainException("error.permission.denied");
-        }
+        workspaceService.validateManagerOrAdmin(managerEmail, workspaceId);
 
         User employee = userRepository.findById(employeeId)
                 .orElseThrow(() -> new DomainException("error.user.not_found"));

@@ -75,7 +75,11 @@ public class WorkspaceService {
 
     @Transactional
     public MemberResponse addMember(String authenticatedEmail, UUID workspaceId, AddMemberRequest request) {
-        validateManagerOrAdmin(authenticatedEmail, workspaceId);
+        WorkspaceMembership authMembership = validateManagerOrAdmin(authenticatedEmail, workspaceId);
+
+        if (authMembership.getRole() == UserRole.MANAGER && request.role() == UserRole.ADMIN) {
+            throw new DomainException("error.permission.denied");
+        }
 
         Workspace workspace = workspaceRepository.findById(workspaceId)
                 .orElseThrow(() -> new DomainException("error.workspace.not_found"));
@@ -112,7 +116,7 @@ public class WorkspaceService {
         );
     }
 
-    private void validateManagerOrAdmin(String email, UUID workspaceId) {
+    public WorkspaceMembership validateManagerOrAdmin(String email, UUID workspaceId) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new DomainException("error.user.not_found"));
 
@@ -122,5 +126,7 @@ public class WorkspaceService {
         if (membership.getRole() != UserRole.MANAGER && membership.getRole() != UserRole.ADMIN) {
             throw new DomainException("error.permission.denied");
         }
+
+        return membership;
     }
 }

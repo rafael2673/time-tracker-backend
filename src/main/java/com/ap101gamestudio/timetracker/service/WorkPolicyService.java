@@ -79,6 +79,20 @@ public class WorkPolicyService {
         return policyRepository.save(policy);
     }
 
+    @Transactional
+    public void deletePolicy(String authenticatedEmail, UUID workspaceId, UUID policyId) {
+        validateAdmin(authenticatedEmail, workspaceId);
+
+        WorkPolicy policy = policyRepository.findById(policyId)
+                .orElseThrow(() -> new DomainException("error.policy.not_found"));
+
+        if (!policy.getWorkspace().getId().equals(workspaceId)) {
+            throw new DomainException("error.permission.denied");
+        }
+
+        policyRepository.delete(policy);
+    }
+
     private WorkspaceMembership getMembership(String email, UUID workspaceId) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new DomainException("error.user.not_found"));
