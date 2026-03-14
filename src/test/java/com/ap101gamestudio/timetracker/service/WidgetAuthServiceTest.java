@@ -81,7 +81,7 @@ class WidgetAuthServiceTest {
         User user = new User("test@test.com", "hash", "Name");
         ReflectionTestUtils.setField(user, "id", UUID.randomUUID());
 
-        WorkPolicy defaultPolicy = new WorkPolicy("Default", 480, 10);
+        WorkPolicy defaultPolicy = new WorkPolicy(workspace,"Default", 480, 10, "MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY");
 
         WidgetLoginRequest request = new WidgetLoginRequest("valid_key", "test@test.com", "Name");
 

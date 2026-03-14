@@ -1,5 +1,6 @@
 package com.ap101gamestudio.timetracker.strategy;
 
+import com.ap101gamestudio.timetracker.model.Workspace;
 import com.ap101gamestudio.timetracker.model.enums.RecordSource;
 import com.ap101gamestudio.timetracker.model.enums.RecordType;
 import com.ap101gamestudio.timetracker.model.TimeRecord;
@@ -15,10 +16,18 @@ import java.util.List;
 class FlexibleHoursStrategyTest {
 
     private final FlexibleHoursStrategy strategy = new FlexibleHoursStrategy();
-
+    private Workspace createWorkspace() {
+        return new Workspace(
+                "Office",
+                -5.7945,
+                -35.2110,
+                100
+        );
+    }
     @Test
     void shouldReturnZeroOvertimeWhenHoursAreWithinTolerance() {
-        WorkPolicy policy = new WorkPolicy("Standard", 480, 10);
+        Workspace workspace = createWorkspace();
+        WorkPolicy policy = new WorkPolicy(workspace,"Standard", 480, 10, "MONDAY,TUESDAY");
         User user = new User("test@test.com", "hash", "Test User");
         LocalDateTime date = LocalDateTime.of(2026, 2, 23, 0, 0);
 
@@ -36,7 +45,8 @@ class FlexibleHoursStrategyTest {
 
     @Test
     void shouldReturnPositiveOvertimeWhenHoursExceedTolerance() {
-        WorkPolicy policy = new WorkPolicy("Standard", 480, 10);
+        Workspace workspace = createWorkspace();
+        WorkPolicy policy = new WorkPolicy(workspace,"Standard", 480, 10, "MONDAY,TUESDAY");
         User user = new User("test@test.com", "hash", "Test User");
         LocalDateTime date = LocalDateTime.of(2026, 2, 23, 0, 0);
 
@@ -54,7 +64,8 @@ class FlexibleHoursStrategyTest {
 
     @Test
     void shouldIgnoreIncompletePairs() {
-        WorkPolicy policy = new WorkPolicy("Standard", 480, 10);
+        Workspace workspace = createWorkspace();
+        WorkPolicy policy = new WorkPolicy(workspace,"Standard", 480, 10, "MONDAY,TUESDAY");
         User user = new User("test@test.com", "hash", "Test User");
         LocalDateTime date = LocalDateTime.of(2026, 2, 23, 0, 0);
 

@@ -102,7 +102,7 @@ class TimeTrackingServiceTest {
         UUID workspaceId = UUID.randomUUID();
         User user = new User(email, "pass", "Rafa");
         Workspace workspace = new Workspace("Office", -5.0, -35.0, 100);
-        WorkPolicy policy = new WorkPolicy("Padrão", 480, 10, "MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY");
+        WorkPolicy policy = new WorkPolicy(workspace, "Padrão", 480, 10, "MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY");
         WorkspaceMembership membership = new WorkspaceMembership(user, workspace, UserRole.EMPLOYEE, policy);
 
         Mockito.when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
