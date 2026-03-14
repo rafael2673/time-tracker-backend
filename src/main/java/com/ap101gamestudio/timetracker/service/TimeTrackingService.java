@@ -2,16 +2,9 @@ package com.ap101gamestudio.timetracker.service;
 
 import com.ap101gamestudio.timetracker.dto.*;
 import com.ap101gamestudio.timetracker.exceptions.DomainException;
-import com.ap101gamestudio.timetracker.model.TimeRecord;
-import com.ap101gamestudio.timetracker.model.User;
-import com.ap101gamestudio.timetracker.model.WorkPolicy;
-import com.ap101gamestudio.timetracker.model.Workspace;
-import com.ap101gamestudio.timetracker.model.WorkspaceMembership;
+import com.ap101gamestudio.timetracker.model.*;
 import com.ap101gamestudio.timetracker.model.enums.RecordSource;
-import com.ap101gamestudio.timetracker.repository.TimeRecordRepository;
-import com.ap101gamestudio.timetracker.repository.UserRepository;
-import com.ap101gamestudio.timetracker.repository.WorkspaceMembershipRepository;
-import com.ap101gamestudio.timetracker.repository.WorkspaceRepository;
+import com.ap101gamestudio.timetracker.repository.*;
 import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 
@@ -32,7 +25,8 @@ public class TimeTrackingService {
     private final UserRepository userRepository;
     private final WorkspaceRepository workspaceRepository;
     private final WorkspaceMembershipRepository membershipRepository;
-    private MessageSource messageSource;
+    private final MessageSource messageSource;
+    private final SpecialDateRepository specialDateRepository;
 
 
     public TimeTrackingService(
@@ -40,13 +34,15 @@ public class TimeTrackingService {
             UserRepository userRepository,
             WorkspaceRepository workspaceRepository,
             WorkspaceMembershipRepository membershipRepository,
-            MessageSource messageSource
+            MessageSource messageSource,
+            SpecialDateRepository specialDateRepository
     ) {
         this.timeRecordRepository = timeRecordRepository;
         this.userRepository = userRepository;
         this.workspaceRepository = workspaceRepository;
         this.membershipRepository = membershipRepository;
         this.messageSource = messageSource;
+        this.specialDateRepository = specialDateRepository;
     }
 
     public TimeRecordResponse registerPoint(String email, CreateTimeRecordRequest request, UUID workspaceId) {
@@ -114,16 +110,15 @@ public class TimeTrackingService {
     }
 
     public List<DailySummaryResponse> getWeeklySummary(String email, LocalDate referenceDate, UUID workspaceId, String localeString) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new DomainException("error.user.not_found"));
-
-        WorkspaceMembership membership = membershipRepository.findByUserIdAndWorkspaceId(user.getId(), workspaceId)
-                .orElseThrow(() -> new DomainException("error.permission.denied"));
+        User user = userRepository.findByEmail(email).orElseThrow(() -> new DomainException("error.user.not_found"));
+        WorkspaceMembership membership = membershipRepository.findByUserIdAndWorkspaceId(user.getId(), workspaceId).orElseThrow(() -> new DomainException("error.permission.denied"));
 
         LocalDate startOfWeek = referenceDate;
         while (startOfWeek.getDayOfWeek() != DayOfWeek.SUNDAY) {
             startOfWeek = startOfWeek.minusDays(1);
         }
+        LocalDate endOfWeek = startOfWeek.plusDays(6);
+        List<SpecialDate> specialDates = specialDateRepository.findRelevantDates(workspaceId, startOfWeek, endOfWeek);
 
         List<DailySummaryResponse> weeklySummary = new ArrayList<>();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
@@ -137,16 +132,22 @@ public class TimeTrackingService {
             LocalDateTime startOfDay = currentDate.atStartOfDay();
             LocalDateTime endOfDay = currentDate.atTime(23, 59, 59);
 
-            List<TimeRecord> dailyRecords = timeRecordRepository.findByUserIdAndWorkspaceIdAndRegisteredAtBetween(
-                    user.getId(), workspaceId, startOfDay, endOfDay);
+            List<TimeRecord> dailyRecords = timeRecordRepository.findByUserIdAndWorkspaceIdAndRegisteredAtBetween(user.getId(), workspaceId, startOfDay, endOfDay);
             dailyRecords = filterActiveRecords(dailyRecords);
             double hours = roundHours(calculateWorkedHours(dailyRecords));
 
-            double expectedHoursForDay = workingDays.contains(currentDate.getDayOfWeek()) ? dailyLimitHours : 0.0;
+            double expectedHoursForDay = 0.0;
+            if (workingDays.contains(currentDate.getDayOfWeek())) {
+                SpecialDate specialDate = findMatchingSpecialDate(specialDates, currentDate);
+                if (specialDate != null) {
+                    expectedHoursForDay = dailyLimitHours * specialDate.getWorkloadMultiplier();
+                } else {
+                    expectedHoursForDay = dailyLimitHours;
+                }
+            }
 
             weeklySummary.add(new DailySummaryResponse(dayNames[i], hours, expectedHoursForDay, currentDate.format(formatter)));
         }
-
         return weeklySummary;
     }
 
@@ -183,17 +184,14 @@ public class TimeTrackingService {
     }
 
     public List<MonthSummaryResponse> getYearlySummary(String email, int year, UUID workspaceId, String localeString) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new DomainException("error.user.not_found"));
-
-        WorkspaceMembership membership = membershipRepository.findByUserIdAndWorkspaceId(user.getId(), workspaceId)
-                .orElseThrow(() -> new DomainException("error.permission.denied"));
+        User user = userRepository.findByEmail(email).orElseThrow(() -> new DomainException("error.user.not_found"));
+        WorkspaceMembership membership = membershipRepository.findByUserIdAndWorkspaceId(user.getId(), workspaceId).orElseThrow(() -> new DomainException("error.permission.denied"));
 
         LocalDateTime startOfYear = LocalDateTime.of(year, 1, 1, 0, 0);
         LocalDateTime endOfYear = LocalDateTime.of(year, 12, 31, 23, 59, 59);
+        List<SpecialDate> specialDates = specialDateRepository.findRelevantDates(workspaceId, startOfYear.toLocalDate(), endOfYear.toLocalDate());
 
-        List<TimeRecord> records = timeRecordRepository.findByUserIdAndWorkspaceIdAndRegisteredAtBetween(
-                user.getId(), workspaceId, startOfYear, endOfYear);
+        List<TimeRecord> records = timeRecordRepository.findByUserIdAndWorkspaceIdAndRegisteredAtBetween(user.getId(), workspaceId, startOfYear, endOfYear);
         records = filterActiveRecords(records);
         Locale locale = Locale.forLanguageTag(localeString);
         String[] monthNames = getMonthNames(locale);
@@ -201,56 +199,61 @@ public class TimeTrackingService {
 
         for (int i = 1; i <= 12; i++) {
             final int currentMonth = i;
-            List<TimeRecord> monthRecords = records.stream()
-                    .filter(r -> r.getRegisteredAt().getMonthValue() == currentMonth)
-                    .toList();
+            List<TimeRecord> monthRecords = records.stream().filter(r -> r.getRegisteredAt().getMonthValue() == currentMonth).toList();
             double hours = roundHours(calculateWorkedHours(monthRecords));
 
             YearMonth ym = YearMonth.of(year, currentMonth);
-            double expectedHours = roundHours(calculateExpectedHours(ym, membership.getWorkPolicy()));
+            double expectedHours = roundHours(calculateExpectedHours(ym, membership.getWorkPolicy(), specialDates));
 
             summary.add(new MonthSummaryResponse(currentMonth, monthNames[currentMonth - 1], hours, expectedHours));
         }
-
         return summary;
     }
 
     public MonthlyBalanceResponse getMonthlyBalance(String email, int year, int month, UUID workspaceId) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new DomainException("error.user.not_found"));
-
-        WorkspaceMembership membership = membershipRepository.findByUserIdAndWorkspaceId(user.getId(), workspaceId)
-                .orElseThrow(() -> new DomainException("error.permission.denied"));
+        User user = userRepository.findByEmail(email).orElseThrow(() -> new DomainException("error.user.not_found"));
+        WorkspaceMembership membership = membershipRepository.findByUserIdAndWorkspaceId(user.getId(), workspaceId).orElseThrow(() -> new DomainException("error.permission.denied"));
 
         YearMonth ym = YearMonth.of(year, month);
         LocalDateTime startOfMonth = ym.atDay(1).atStartOfDay();
         LocalDateTime endOfMonth = ym.atEndOfMonth().atTime(23, 59, 59);
+        List<SpecialDate> specialDates = specialDateRepository.findRelevantDates(workspaceId, startOfMonth.toLocalDate(), endOfMonth.toLocalDate());
 
-        List<TimeRecord> records = timeRecordRepository.findByUserIdAndWorkspaceIdAndRegisteredAtBetween(
-                user.getId(), workspaceId, startOfMonth, endOfMonth);
+        List<TimeRecord> records = timeRecordRepository.findByUserIdAndWorkspaceIdAndRegisteredAtBetween(user.getId(), workspaceId, startOfMonth, endOfMonth);
         records = filterActiveRecords(records);
 
         double workedHours = roundHours(calculateWorkedHours(records));
-        double expectedHours = roundHours(calculateExpectedHours(ym, membership.getWorkPolicy()));
+        double expectedHours = roundHours(calculateExpectedHours(ym, membership.getWorkPolicy(), specialDates));
         double balance = roundHours(workedHours - expectedHours);
 
         return new MonthlyBalanceResponse(workedHours, expectedHours, balance);
     }
 
-    private double calculateExpectedHours(YearMonth yearMonth, WorkPolicy policy) {
+    private double calculateExpectedHours(YearMonth yearMonth, WorkPolicy policy, List<SpecialDate> specialDates) {
         LocalDate today = LocalDate.now();
         LocalDate lastDayToCount = resolveLastDayToCount(yearMonth, today);
         List<DayOfWeek> workingDays = policy.getWorkingDaysList();
+        double dailyHours = policy.getDailyMinutesLimit() / 60.0;
+        double totalExpectedHours = 0.0;
 
-        long workDays = 0;
         for (int i = 1; i <= yearMonth.lengthOfMonth(); i++) {
             LocalDate day = yearMonth.atDay(i);
-            if (!day.isAfter(lastDayToCount) && workingDays.contains(day.getDayOfWeek())) {
-                workDays++;
+            if (!day.isAfter(lastDayToCount)) {
+                if (workingDays.contains(day.getDayOfWeek())) {
+                    SpecialDate specialDate = specialDates.stream()
+                            .filter(sd -> sd.getDate().equals(day))
+                            .findFirst()
+                            .orElse(null);
+
+                    if (specialDate != null) {
+                        totalExpectedHours += dailyHours * specialDate.getWorkloadMultiplier();
+                    } else {
+                        totalExpectedHours += dailyHours;
+                    }
+                }
             }
         }
-
-        return workDays * (policy.getDailyMinutesLimit() / 60.0);
+        return totalExpectedHours;
     }
 
     private LocalDate resolveLastDayToCount(YearMonth yearMonth, LocalDate today) {
@@ -359,5 +362,13 @@ public class TimeTrackingService {
     public String[] getDayNames(Locale locale) {
         String rawNames = messageSource.getMessage("day.names.abrev", null, locale);
         return rawNames.split(",");
+    }
+
+    private SpecialDate findMatchingSpecialDate(List<SpecialDate> specialDates, LocalDate date) {
+        return specialDates.stream()
+                .filter(sd -> sd.getDate().equals(date) ||
+                        (sd.isRecurring() && sd.getDate().getMonth() == date.getMonth() && sd.getDate().getDayOfMonth() == date.getDayOfMonth()))
+                .findFirst()
+                .orElse(null);
     }
 }
