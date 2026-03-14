@@ -1,9 +1,10 @@
 package com.ap101gamestudio.timetracker.controller;
 
 import com.ap101gamestudio.timetracker.dto.DailySummaryResponse;
+import com.ap101gamestudio.timetracker.dto.EmployeeDashboardSummary;
 import com.ap101gamestudio.timetracker.dto.MonthSummaryResponse;
 import com.ap101gamestudio.timetracker.dto.MonthlyBalanceResponse;
-import com.ap101gamestudio.timetracker.security.JwtService;
+import com.ap101gamestudio.timetracker.service.SummaryService;
 import com.ap101gamestudio.timetracker.service.TimeTrackingService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -18,61 +19,60 @@ import java.util.UUID;
 public class SummaryController {
 
     private final TimeTrackingService timeTrackingService;
-    private final JwtService jwtService;
+    private final SummaryService summaryService;
 
-    public SummaryController(TimeTrackingService timeTrackingService, JwtService jwtService) {
+    public SummaryController(
+            TimeTrackingService timeTrackingService,
+            SummaryService summaryService
+    ) {
         this.timeTrackingService = timeTrackingService;
-        this.jwtService = jwtService;
+        this.summaryService = summaryService;
     }
 
     @GetMapping("/weekly")
     public ResponseEntity<List<DailySummaryResponse>> getWeeklySummary(
             @RequestParam String date,
-            @RequestHeader("Authorization") String authHeader,
+            @RequestHeader("X-Workspace-Id") UUID workspaceId,
             Authentication authentication
     ) {
-        String email = authentication.getName();
-        String token = authHeader.substring(7);
-        UUID workspaceId = UUID.fromString(jwtService.extractWorkspaceId(token));
         LocalDate referenceDate = LocalDate.parse(date);
-
-        List<DailySummaryResponse> response = timeTrackingService.getWeeklySummary(email, referenceDate, workspaceId);
+        List<DailySummaryResponse> response = timeTrackingService.getWeeklySummary(authentication.getName(), referenceDate, workspaceId);
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/years")
     public ResponseEntity<List<Integer>> getAvailableYears(
-            @RequestHeader("Authorization") String authHeader,
+            @RequestHeader("X-Workspace-Id") UUID workspaceId,
             Authentication authentication
     ) {
-        String email = authentication.getName();
-        String token = authHeader.substring(7);
-        UUID workspaceId = UUID.fromString(jwtService.extractWorkspaceId(token));
-        return ResponseEntity.ok(timeTrackingService.getAvailableYears(email, workspaceId));
+        return ResponseEntity.ok(timeTrackingService.getAvailableYears(authentication.getName(), workspaceId));
     }
 
     @GetMapping("/yearly")
     public ResponseEntity<List<MonthSummaryResponse>> getYearlySummary(
             @RequestParam int year,
-            @RequestHeader("Authorization") String authHeader,
+            @RequestHeader("X-Workspace-Id") UUID workspaceId,
             Authentication authentication
     ) {
-        String email = authentication.getName();
-        String token = authHeader.substring(7);
-        UUID workspaceId = UUID.fromString(jwtService.extractWorkspaceId(token));
-        return ResponseEntity.ok(timeTrackingService.getYearlySummary(email, year, workspaceId));
+        return ResponseEntity.ok(timeTrackingService.getYearlySummary(authentication.getName(), year, workspaceId));
     }
 
     @GetMapping("/monthly-balance")
     public ResponseEntity<MonthlyBalanceResponse> getMonthlyBalance(
             @RequestParam int year,
             @RequestParam int month,
-            @RequestHeader("Authorization") String authHeader,
+            @RequestHeader("X-Workspace-Id") UUID workspaceId,
             Authentication authentication
     ) {
-        String email = authentication.getName();
-        String token = authHeader.substring(7);
-        UUID workspaceId = UUID.fromString(jwtService.extractWorkspaceId(token));
-        return ResponseEntity.ok(timeTrackingService.getMonthlyBalance(email, year, month, workspaceId));
+        return ResponseEntity.ok(timeTrackingService.getMonthlyBalance(authentication.getName(), year, month, workspaceId));
+    }
+
+    @GetMapping("/employee/{employeeId}")
+    public ResponseEntity<EmployeeDashboardSummary> getEmployeeSummary(
+            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @PathVariable UUID employeeId,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(summaryService.getEmployeeSummary(authentication.getName(), workspaceId, employeeId));
     }
 }

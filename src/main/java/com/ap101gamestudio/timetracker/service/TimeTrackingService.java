@@ -14,6 +14,8 @@ import com.ap101gamestudio.timetracker.repository.WorkspaceMembershipRepository;
 import com.ap101gamestudio.timetracker.repository.WorkspaceRepository;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -130,7 +132,7 @@ public class TimeTrackingService {
             List<TimeRecord> dailyRecords = timeRecordRepository.findByUserIdAndWorkspaceIdAndRegisteredAtBetween(
                     user.getId(), workspaceId, startOfDay, endOfDay);
             dailyRecords = filterActiveRecords(dailyRecords);
-            double hours = calculateWorkedHours(dailyRecords);
+            double hours = roundHours(calculateWorkedHours(dailyRecords));
 
             weeklySummary.add(new DailySummaryResponse(dayNames[i], hours, currentDate.format(formatter)));
         }
@@ -168,7 +170,7 @@ public class TimeTrackingService {
             List<TimeRecord> monthRecords = records.stream()
                     .filter(r -> r.getRegisteredAt().getMonthValue() == currentMonth)
                     .toList();
-            double hours = calculateWorkedHours(monthRecords);
+            double hours = roundHours(calculateWorkedHours(monthRecords));
             summary.add(new MonthSummaryResponse(currentMonth, monthNames[currentMonth - 1], hours));
         }
 
@@ -190,9 +192,9 @@ public class TimeTrackingService {
                 user.getId(), workspaceId, startOfMonth, endOfMonth);
         records = filterActiveRecords(records);
 
-        double workedHours = calculateWorkedHours(records);
-        double expectedHours = calculateExpectedHours(ym, membership.getWorkPolicy());
-        double balance = workedHours - expectedHours;
+        double workedHours = roundHours(calculateWorkedHours(records));
+        double expectedHours = roundHours(calculateExpectedHours(ym, membership.getWorkPolicy()));
+        double balance = roundHours(workedHours - expectedHours);
 
         return new MonthlyBalanceResponse(workedHours, expectedHours, balance);
     }
@@ -268,6 +270,12 @@ public class TimeTrackingService {
         }
 
         return totalSeconds / 3600.0;
+    }
+
+    private double roundHours(double value) {
+        BigDecimal bd = new BigDecimal(Double.toString(value));
+        bd = bd.setScale(2, RoundingMode.HALF_UP);
+        return bd.doubleValue();
     }
 
     private TimeRecordResponse mapToResponse(TimeRecord saved) {

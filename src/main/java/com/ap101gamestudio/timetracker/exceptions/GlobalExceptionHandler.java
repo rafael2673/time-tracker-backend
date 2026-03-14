@@ -33,4 +33,19 @@ public class GlobalExceptionHandler {
 
     return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
   }
+
+  @ExceptionHandler(WorkspaceIdExtractException.class)
+  public ResponseEntity<Map<String, String>> handleWorksPaceIdExtractException(WorkspaceIdExtractException ex) {
+    String translatedMessage;
+    try {
+      translatedMessage = messageSource.getMessage(ex.getMessage(), null, LocaleContextHolder.getLocale());
+    } catch (Exception e) {
+      translatedMessage = ex.getMessage();
+    }
+
+    Map<String, String> response = new HashMap<>();
+    response.put("error", translatedMessage);
+
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+  }
 }
