@@ -19,6 +19,7 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -43,6 +44,9 @@ class TimeTrackingServiceTest {
 
     @Mock
     private SpecialDateRepository specialDateRepository;
+
+    @Mock
+    private EmployeeLeaveRepository employeeLeaveRepository;
 
     @InjectMocks
     private TimeTrackingService timeTrackingService;
@@ -101,14 +105,16 @@ class TimeTrackingServiceTest {
         String email = "rafael@email.com";
         UUID workspaceId = UUID.randomUUID();
         User user = new User(email, "pass", "Rafa");
+        ReflectionTestUtils.setField(user, "id", UUID.randomUUID());
         Workspace workspace = new Workspace("Office", -5.0, -35.0, 100);
         WorkPolicy policy = new WorkPolicy(workspace, "Padrão", 480, 10, "MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY");
         WorkspaceMembership membership = new WorkspaceMembership(user, workspace, UserRole.EMPLOYEE, policy);
 
         Mockito.when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
         Mockito.when(membershipRepository.findByUserIdAndWorkspaceId(any(), any())).thenReturn(Optional.of(membership));
-        Mockito.when(specialDateRepository.findRelevantDates(any(), any(), any()))
-                .thenReturn(List.of());
+        Mockito.when(specialDateRepository.findRelevantDates(any(), any(), any())).thenReturn(List.of());
+        Mockito.when(employeeLeaveRepository.findOverlappingLeaves(any(), any(), any(), any())).thenReturn(List.of());
+        
         LocalDateTime today = LocalDateTime.now();
         List<TimeRecord> records = List.of(
                 new TimeRecord(user, workspace, RecordType.ENTRY, RecordSource.MANUAL, today.withHour(8).withMinute(0), null, null),
@@ -121,5 +127,102 @@ class TimeTrackingServiceTest {
 
         Assertions.assertEquals(10.0, response.workedHours());
         Assertions.assertEquals(10.0 - response.expectedHours(), response.balance());
+    }
+
+    @Test
+    void shouldCalculateMonthlyBalanceWithPausesCorrectly() {
+        String email = "rafael@email.com";
+        UUID workspaceId = UUID.randomUUID();
+        User user = new User(email, "pass", "Rafa");
+        ReflectionTestUtils.setField(user, "id", UUID.randomUUID());
+        Workspace workspace = new Workspace("Office", -5.0, -35.0, 100);
+        WorkPolicy policy = new WorkPolicy(workspace, "Padrão", 480, 10, "MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY");
+        WorkspaceMembership membership = new WorkspaceMembership(user, workspace, UserRole.EMPLOYEE, policy);
+
+        Mockito.when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
+        Mockito.when(membershipRepository.findByUserIdAndWorkspaceId(any(), any())).thenReturn(Optional.of(membership));
+        Mockito.when(specialDateRepository.findRelevantDates(any(), any(), any())).thenReturn(List.of());
+        Mockito.when(employeeLeaveRepository.findOverlappingLeaves(any(), any(), any(), any())).thenReturn(List.of());
+        
+        LocalDateTime today = LocalDateTime.now();
+        List<TimeRecord> records = List.of(
+                new TimeRecord(user, workspace, RecordType.ENTRY, RecordSource.MANUAL, today.withHour(8).withMinute(0), null, null),
+                new TimeRecord(user, workspace, RecordType.PAUSE_START, RecordSource.MANUAL, today.withHour(12).withMinute(0), null, null),
+                new TimeRecord(user, workspace, RecordType.PAUSE_END, RecordSource.MANUAL, today.withHour(13).withMinute(0), null, null),
+                new TimeRecord(user, workspace, RecordType.EXIT, RecordSource.MANUAL, today.withHour(18).withMinute(0), null, null)
+        );
+
+        Mockito.when(timeRecordRepository.findByUserIdAndWorkspaceIdAndRegisteredAtBetween(any(), any(), any(), any())).thenReturn(records);
+
+        MonthlyBalanceResponse response = timeTrackingService.getMonthlyBalance(email, today.getYear(), today.getMonthValue(), workspaceId);
+
+        // 8 to 12 = 4h
+        // 13 to 18 = 5h
+        // Total = 9h
+        Assertions.assertEquals(9.0, response.workedHours());
+    }
+
+    @Test
+    void shouldCalculateMonthlyBalanceIgnoringSupersededRecords() {
+        String email = "rafael@email.com";
+        UUID workspaceId = UUID.randomUUID();
+        User user = new User(email, "pass", "Rafa");
+        ReflectionTestUtils.setField(user, "id", UUID.randomUUID());
+        Workspace workspace = new Workspace("Office", -5.0, -35.0, 100);
+        WorkPolicy policy = new WorkPolicy(workspace, "Padrão", 480, 10, "MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY");
+        WorkspaceMembership membership = new WorkspaceMembership(user, workspace, UserRole.EMPLOYEE, policy);
+
+        Mockito.when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
+        Mockito.when(membershipRepository.findByUserIdAndWorkspaceId(any(), any())).thenReturn(Optional.of(membership));
+        Mockito.when(specialDateRepository.findRelevantDates(any(), any(), any())).thenReturn(List.of());
+        Mockito.when(employeeLeaveRepository.findOverlappingLeaves(any(), any(), any(), any())).thenReturn(List.of());
+        
+        LocalDateTime today = LocalDateTime.now();
+        TimeRecord oldRecord = new TimeRecord(user, workspace, RecordType.ENTRY, RecordSource.MANUAL, today.withHour(8).withMinute(0), null, null);
+        ReflectionTestUtils.setField(oldRecord, "id", UUID.randomUUID());
+        
+        TimeRecord newRecord = new TimeRecord(user, workspace, RecordType.ENTRY, RecordSource.MANUAL, today.withHour(9).withMinute(0), null, oldRecord);
+        ReflectionTestUtils.setField(newRecord, "id", UUID.randomUUID());
+
+        TimeRecord exitRecord = new TimeRecord(user, workspace, RecordType.EXIT, RecordSource.MANUAL, today.withHour(18).withMinute(0), null, null);
+        ReflectionTestUtils.setField(exitRecord, "id", UUID.randomUUID());
+
+        List<TimeRecord> records = List.of(oldRecord, newRecord, exitRecord);
+
+        Mockito.when(timeRecordRepository.findByUserIdAndWorkspaceIdAndRegisteredAtBetween(any(), any(), any(), any())).thenReturn(records);
+
+        MonthlyBalanceResponse response = timeTrackingService.getMonthlyBalance(email, today.getYear(), today.getMonthValue(), workspaceId);
+
+        // newRecord (9:00) to exitRecord (18:00) = 9 hours
+        // oldRecord (8:00) is ignored
+        Assertions.assertEquals(9.0, response.workedHours());
+    }
+
+    @Test
+    void shouldCalculateExpectedHoursWithSpecialDatesAndLeaves() {
+        String email = "rafael@email.com";
+        UUID workspaceId = UUID.randomUUID();
+        User user = new User(email, "pass", "Rafa");
+        ReflectionTestUtils.setField(user, "id", UUID.randomUUID());
+        Workspace workspace = new Workspace("Office", -5.0, -35.0, 100);
+        WorkPolicy policy = new WorkPolicy(workspace, "Padrão", 480, 10, "MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY");
+        WorkspaceMembership membership = new WorkspaceMembership(user, workspace, UserRole.EMPLOYEE, policy);
+
+        Mockito.when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
+        Mockito.when(membershipRepository.findByUserIdAndWorkspaceId(any(), any())).thenReturn(Optional.of(membership));
+        
+        SpecialDate specialDate = new SpecialDate(workspace, LocalDate.of(2023, 1, 2), "Half Day", 0.5, false);
+        Mockito.when(specialDateRepository.findRelevantDates(any(), any(), any())).thenReturn(List.of(specialDate));
+        
+        EmployeeLeave leave = new EmployeeLeave(workspace, user, LocalDate.of(2023, 1, 9), LocalDate.of(2023, 1, 10), "Vacation");
+        Mockito.when(employeeLeaveRepository.findOverlappingLeaves(any(), any(), any(), any())).thenReturn(List.of(leave));
+        
+        Mockito.when(timeRecordRepository.findByUserIdAndWorkspaceIdAndRegisteredAtBetween(any(), any(), any(), any())).thenReturn(List.of());
+
+        MonthlyBalanceResponse response = timeTrackingService.getMonthlyBalance(email, 2023, 1, workspaceId);
+
+        Assertions.assertEquals(0.0, response.workedHours());
+        Assertions.assertEquals(156.0, response.expectedHours());
+        Assertions.assertEquals(-156.0, response.balance());
     }
 }
