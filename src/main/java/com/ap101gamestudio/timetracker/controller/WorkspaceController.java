@@ -1,8 +1,6 @@
 package com.ap101gamestudio.timetracker.controller;
 
-import com.ap101gamestudio.timetracker.dto.AddMemberRequest;
-import com.ap101gamestudio.timetracker.dto.MemberResponse;
-import com.ap101gamestudio.timetracker.dto.WorkspaceResponse;
+import com.ap101gamestudio.timetracker.dto.*;
 import com.ap101gamestudio.timetracker.service.WorkspaceService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -16,23 +14,25 @@ import java.util.UUID;
 @RequestMapping("/api/v1/workspaces")
 public class WorkspaceController {
 
-    private final WorkspaceService service;
+    private final WorkspaceService workspaceService;
 
-    public WorkspaceController(WorkspaceService service) {
-        this.service = service;
+    public WorkspaceController(WorkspaceService workspaceService) {
+        this.workspaceService = workspaceService;
     }
 
     @GetMapping("/my")
     public ResponseEntity<List<WorkspaceResponse>> getMyWorkspaces(Authentication authentication) {
-        return ResponseEntity.ok(service.getUserWorkspaces(authentication.getName()));
+        return ResponseEntity.ok(workspaceService.getUserWorkspaces(authentication.getName()));
     }
 
     @GetMapping("/{workspaceId}/members")
-    public ResponseEntity<List<MemberResponse>> getMembers(
-            Authentication authentication,
-            @PathVariable UUID workspaceId
+    public ResponseEntity<PageResponse<WorkspaceMemberResponse>> getWorkspaceMembers(
+            @PathVariable UUID workspaceId,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
     ) {
-        return ResponseEntity.ok(service.getWorkspaceMembers(authentication.getName(), workspaceId));
+        return ResponseEntity.ok(workspaceService.getWorkspaceMembers(workspaceId, search, page, size));
     }
 
     @PostMapping("/{workspaceId}/members")
@@ -41,6 +41,23 @@ public class WorkspaceController {
             @PathVariable UUID workspaceId,
             @RequestBody @Valid AddMemberRequest request
     ) {
-        return ResponseEntity.ok(service.addMember(authentication.getName(), workspaceId, request));
+        return ResponseEntity.ok(workspaceService.addMember(authentication.getName(), workspaceId, request));
+    }
+
+    @PutMapping("/{workspaceId}/members/{employeeId}")
+    public ResponseEntity<Void> updateMember(
+            Authentication authentication,
+            @PathVariable UUID workspaceId,
+            @PathVariable UUID employeeId,
+            @RequestBody @Valid UpdateMemberRequest request
+    ) {
+        workspaceService.updateMember(authentication.getName(), workspaceId, employeeId, request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{workspaceId}/members/{employeeId}/status")
+    public ResponseEntity<Void> changeMemberStatus(Authentication authentication, @PathVariable UUID workspaceId, @PathVariable UUID employeeId, @RequestParam boolean active) {
+        workspaceService.changeMemberStatus(authentication.getName(), workspaceId, employeeId, active);
+        return ResponseEntity.noContent().build();
     }
 }

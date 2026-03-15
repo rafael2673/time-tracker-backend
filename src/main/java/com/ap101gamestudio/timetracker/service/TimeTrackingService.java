@@ -27,6 +27,7 @@ public class TimeTrackingService {
     private final WorkspaceMembershipRepository membershipRepository;
     private final MessageSource messageSource;
     private final SpecialDateRepository specialDateRepository;
+    private final EmployeeLeaveRepository employeeLeaveRepository;
 
 
     public TimeTrackingService(
@@ -35,7 +36,8 @@ public class TimeTrackingService {
             WorkspaceRepository workspaceRepository,
             WorkspaceMembershipRepository membershipRepository,
             MessageSource messageSource,
-            SpecialDateRepository specialDateRepository
+            SpecialDateRepository specialDateRepository,
+            EmployeeLeaveRepository employeeLeaveRepository
     ) {
         this.timeRecordRepository = timeRecordRepository;
         this.userRepository = userRepository;
@@ -43,6 +45,7 @@ public class TimeTrackingService {
         this.membershipRepository = membershipRepository;
         this.messageSource = messageSource;
         this.specialDateRepository = specialDateRepository;
+        this.employeeLeaveRepository = employeeLeaveRepository;
     }
 
     public TimeRecordResponse registerPoint(String email, CreateTimeRecordRequest request, UUID workspaceId) {
@@ -152,9 +155,6 @@ public class TimeTrackingService {
     }
 
     public MonthlyBalanceResponse getQuarterlyBalance(String email, int year, int quarter, UUID workspaceId) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new DomainException("error.user.not_found"));
-
         int startMonth = (quarter - 1) * 3 + 1;
         int endMonth = startMonth + 2;
 
@@ -189,21 +189,20 @@ public class TimeTrackingService {
 
         LocalDateTime startOfYear = LocalDateTime.of(year, 1, 1, 0, 0);
         LocalDateTime endOfYear = LocalDateTime.of(year, 12, 31, 23, 59, 59);
-        List<SpecialDate> specialDates = specialDateRepository.findRelevantDates(workspaceId, startOfYear.toLocalDate(), endOfYear.toLocalDate());
+        
+        PeriodData periodData = getPeriodData(user.getId(), workspaceId, startOfYear, endOfYear);
 
-        List<TimeRecord> records = timeRecordRepository.findByUserIdAndWorkspaceIdAndRegisteredAtBetween(user.getId(), workspaceId, startOfYear, endOfYear);
-        records = filterActiveRecords(records);
         Locale locale = Locale.forLanguageTag(localeString);
         String[] monthNames = getMonthNames(locale);
         List<MonthSummaryResponse> summary = new ArrayList<>();
 
         for (int i = 1; i <= 12; i++) {
             final int currentMonth = i;
-            List<TimeRecord> monthRecords = records.stream().filter(r -> r.getRegisteredAt().getMonthValue() == currentMonth).toList();
+            List<TimeRecord> monthRecords = periodData.records().stream().filter(r -> r.getRegisteredAt().getMonthValue() == currentMonth).toList();
             double hours = roundHours(calculateWorkedHours(monthRecords));
 
             YearMonth ym = YearMonth.of(year, currentMonth);
-            double expectedHours = roundHours(calculateExpectedHours(ym, membership.getWorkPolicy(), specialDates));
+            double expectedHours = roundHours(calculateExpectedHours(ym, membership.getWorkPolicy(), periodData.specialDates(), periodData.leaves()));
 
             summary.add(new MonthSummaryResponse(currentMonth, monthNames[currentMonth - 1], hours, expectedHours));
         }
@@ -217,19 +216,26 @@ public class TimeTrackingService {
         YearMonth ym = YearMonth.of(year, month);
         LocalDateTime startOfMonth = ym.atDay(1).atStartOfDay();
         LocalDateTime endOfMonth = ym.atEndOfMonth().atTime(23, 59, 59);
-        List<SpecialDate> specialDates = specialDateRepository.findRelevantDates(workspaceId, startOfMonth.toLocalDate(), endOfMonth.toLocalDate());
+        
+        PeriodData periodData = getPeriodData(user.getId(), workspaceId, startOfMonth, endOfMonth);
 
-        List<TimeRecord> records = timeRecordRepository.findByUserIdAndWorkspaceIdAndRegisteredAtBetween(user.getId(), workspaceId, startOfMonth, endOfMonth);
-        records = filterActiveRecords(records);
-
-        double workedHours = roundHours(calculateWorkedHours(records));
-        double expectedHours = roundHours(calculateExpectedHours(ym, membership.getWorkPolicy(), specialDates));
+        double workedHours = roundHours(calculateWorkedHours(periodData.records()));
+        double expectedHours = roundHours(calculateExpectedHours(ym, membership.getWorkPolicy(), periodData.specialDates(), periodData.leaves()));
         double balance = roundHours(workedHours - expectedHours);
 
         return new MonthlyBalanceResponse(workedHours, expectedHours, balance);
     }
+    
+    private record PeriodData(List<SpecialDate> specialDates, List<EmployeeLeave> leaves, List<TimeRecord> records) {}
 
-    private double calculateExpectedHours(YearMonth yearMonth, WorkPolicy policy, List<SpecialDate> specialDates) {
+    private PeriodData getPeriodData(UUID userId, UUID workspaceId, LocalDateTime start, LocalDateTime end) {
+        List<SpecialDate> specialDates = specialDateRepository.findRelevantDates(workspaceId, start.toLocalDate(), end.toLocalDate());
+        List<EmployeeLeave> leaves = employeeLeaveRepository.findOverlappingLeaves(userId, workspaceId, start.toLocalDate(), end.toLocalDate());
+        List<TimeRecord> records = timeRecordRepository.findByUserIdAndWorkspaceIdAndRegisteredAtBetween(userId, workspaceId, start, end);
+        return new PeriodData(specialDates, leaves, filterActiveRecords(records));
+    }
+
+    private double calculateExpectedHours(YearMonth yearMonth, WorkPolicy policy, List<SpecialDate> specialDates, List<EmployeeLeave> leaves) {
         LocalDate today = LocalDate.now();
         LocalDate lastDayToCount = resolveLastDayToCount(yearMonth, today);
         List<DayOfWeek> workingDays = policy.getWorkingDaysList();
@@ -239,12 +245,12 @@ public class TimeTrackingService {
         for (int i = 1; i <= yearMonth.lengthOfMonth(); i++) {
             LocalDate day = yearMonth.atDay(i);
             if (!day.isAfter(lastDayToCount)) {
-                if (workingDays.contains(day.getDayOfWeek())) {
-                    SpecialDate specialDate = specialDates.stream()
-                            .filter(sd -> sd.getDate().equals(day))
-                            .findFirst()
-                            .orElse(null);
+                boolean isLeave = leaves.stream().anyMatch(l -> !day.isBefore(l.getStartDate()) && !day.isAfter(l.getEndDate()));
 
+                if (isLeave) continue;
+
+                if (workingDays.contains(day.getDayOfWeek())) {
+                    SpecialDate specialDate = findMatchingSpecialDate(specialDates, day);
                     if (specialDate != null) {
                         totalExpectedHours += dailyHours * specialDate.getWorkloadMultiplier();
                     } else {

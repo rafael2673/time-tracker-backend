@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Getter
@@ -39,6 +40,16 @@ public class WorkspaceMembership {
     @JoinColumn(name = "manager_id")
     private User manager;
 
+    @Column(name = "joined_at", nullable = false, updatable = false)
+    private LocalDateTime joinedAt;
+
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt;
+
+    @Setter
+    @Column(nullable = false)
+    private boolean active = true;
+
     protected WorkspaceMembership() {}
 
     public WorkspaceMembership(User user, Workspace workspace, UserRole role, WorkPolicy workPolicy) {
@@ -46,5 +57,16 @@ public class WorkspaceMembership {
         this.workspace = workspace;
         this.role = role;
         this.workPolicy = workPolicy;
+    }
+
+    @PrePersist
+    protected void onCreate() {
+        this.joinedAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now();
     }
 }

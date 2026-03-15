@@ -1,8 +1,6 @@
 package com.ap101gamestudio.timetracker.service;
 
-import com.ap101gamestudio.timetracker.dto.AddMemberRequest;
-import com.ap101gamestudio.timetracker.dto.MemberResponse;
-import com.ap101gamestudio.timetracker.dto.WorkspaceResponse;
+import com.ap101gamestudio.timetracker.dto.*;
 import com.ap101gamestudio.timetracker.exceptions.DomainException;
 import com.ap101gamestudio.timetracker.model.User;
 import com.ap101gamestudio.timetracker.model.WorkPolicy;
@@ -13,6 +11,10 @@ import com.ap101gamestudio.timetracker.repository.UserRepository;
 import com.ap101gamestudio.timetracker.repository.WorkPolicyRepository;
 import com.ap101gamestudio.timetracker.repository.WorkspaceMembershipRepository;
 import com.ap101gamestudio.timetracker.repository.WorkspaceRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,19 +60,24 @@ public class WorkspaceService {
                 .collect(Collectors.toList());
     }
 
-    public List<MemberResponse> getWorkspaceMembers(String authenticatedEmail, UUID workspaceId) {
-        validateManagerOrAdmin(authenticatedEmail, workspaceId);
+    public PageResponse<WorkspaceMemberResponse> getWorkspaceMembers(UUID workspaceId, String search, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("user.fullName").ascending());
+        Page<WorkspaceMembership> result = membershipRepository.findByWorkspaceIdWithSearch(workspaceId, search, pageable);
 
-        return membershipRepository.findAllByWorkspaceId(workspaceId)
-                .stream()
-                .map(membership -> new MemberResponse(
-                        membership.getUser().getId(),
-                        membership.getUser().getFullName(),
-                        membership.getUser().getEmail(),
-                        membership.getRole(),
-                        membership.getWorkPolicy() != null ? membership.getWorkPolicy().getName() : null
+        List<WorkspaceMemberResponse> content = result.getContent().stream()
+                .map(wm -> new WorkspaceMemberResponse(
+                        wm.getUser().getId(),
+                        wm.getUser().getFullName(),
+                        wm.getUser().getEmail(),
+                        wm.getRole().name(),
+                        wm.getWorkPolicy() != null ? wm.getWorkPolicy().getName() : null,
+                        wm.getWorkPolicy() != null ? wm.getWorkPolicy().getId() : null,
+                        wm.getJoinedAt(),
+                        wm.isActive()
                 ))
-                .collect(Collectors.toList());
+                .toList();
+
+        return new PageResponse<>(content, result.getTotalPages(), result.getTotalElements(), result.getNumber());
     }
 
     @Transactional
@@ -128,5 +135,46 @@ public class WorkspaceService {
         }
 
         return membership;
+    }
+
+    public void updateMember(String authenticatedEmail, UUID workspaceId, UUID employeeId, UpdateMemberRequest request) {
+        User authUser = userRepository.findByEmail(authenticatedEmail)
+                .orElseThrow(() -> new DomainException("error.user.not_found"));
+
+        WorkspaceMembership authMembership = membershipRepository.findByUserIdAndWorkspaceId(authUser.getId(), workspaceId)
+                .orElseThrow(() -> new DomainException("error.permission.denied"));
+
+        if (authMembership.getRole() == UserRole.EMPLOYEE) {
+            throw new DomainException("error.permission.denied");
+        }
+
+        WorkspaceMembership targetMembership = membershipRepository.findByUserIdAndWorkspaceId(employeeId, workspaceId)
+                .orElseThrow(() -> new DomainException("error.employee.not_in_workspace"));
+
+        WorkPolicy policy = workPolicyRepository.findById(request.workPolicyId())
+                .orElseThrow(() -> new DomainException("error.policy.not_found"));
+
+        if (!policy.getWorkspace().getId().equals(workspaceId)) {
+            throw new DomainException("error.permission.denied");
+        }
+
+        User targetUser = targetMembership.getUser();
+        targetUser.setFullName(request.fullName());
+        userRepository.save(targetUser);
+
+        targetMembership.setRole(UserRole.valueOf(request.role()));
+        targetMembership.setWorkPolicy(policy);
+        membershipRepository.save(targetMembership);
+    }
+
+    public void changeMemberStatus(String authenticatedEmail, UUID workspaceId, UUID employeeId, boolean active) {
+        User authUser = userRepository.findByEmail(authenticatedEmail).orElseThrow(() -> new DomainException("error.user.not_found"));
+        WorkspaceMembership authMembership = membershipRepository.findByUserIdAndWorkspaceId(authUser.getId(), workspaceId).orElseThrow(() -> new DomainException("error.permission.denied"));
+
+        if (authMembership.getRole() == UserRole.EMPLOYEE) throw new DomainException("error.permission.denied");
+
+        WorkspaceMembership targetMembership = membershipRepository.findByUserIdAndWorkspaceId(employeeId, workspaceId).orElseThrow(() -> new DomainException("error.employee.not_in_workspace"));
+        targetMembership.setActive(active);
+        membershipRepository.save(targetMembership);
     }
 }
