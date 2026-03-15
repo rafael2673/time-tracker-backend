@@ -9,10 +9,7 @@ import com.ap101gamestudio.timetracker.model.*;
 import com.ap101gamestudio.timetracker.model.enums.RecordSource;
 import com.ap101gamestudio.timetracker.model.enums.RecordType;
 import com.ap101gamestudio.timetracker.model.enums.UserRole;
-import com.ap101gamestudio.timetracker.repository.TimeRecordRepository;
-import com.ap101gamestudio.timetracker.repository.UserRepository;
-import com.ap101gamestudio.timetracker.repository.WorkspaceMembershipRepository;
-import com.ap101gamestudio.timetracker.repository.WorkspaceRepository;
+import com.ap101gamestudio.timetracker.repository.*;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,6 +40,9 @@ class TimeTrackingServiceTest {
 
     @Mock
     private WorkspaceMembershipRepository membershipRepository;
+
+    @Mock
+    private SpecialDateRepository specialDateRepository;
 
     @InjectMocks
     private TimeTrackingService timeTrackingService;
@@ -107,7 +107,8 @@ class TimeTrackingServiceTest {
 
         Mockito.when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
         Mockito.when(membershipRepository.findByUserIdAndWorkspaceId(any(), any())).thenReturn(Optional.of(membership));
-
+        Mockito.when(specialDateRepository.findRelevantDates(any(), any(), any()))
+                .thenReturn(List.of());
         LocalDateTime today = LocalDateTime.now();
         List<TimeRecord> records = List.of(
                 new TimeRecord(user, workspace, RecordType.ENTRY, RecordSource.MANUAL, today.withHour(8).withMinute(0), null, null),
