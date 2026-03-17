@@ -1,8 +1,6 @@
 package com.ap101gamestudio.timetracker.controller;
 
-import com.ap101gamestudio.timetracker.dto.CreateTimeRecordRequest;
-import com.ap101gamestudio.timetracker.dto.TimeRecordResponse;
-import com.ap101gamestudio.timetracker.dto.UpdateTimeRecordRequest;
+import com.ap101gamestudio.timetracker.dto.*;
 import com.ap101gamestudio.timetracker.security.JwtService;
 import com.ap101gamestudio.timetracker.service.TimeTrackingService;
 import jakarta.validation.Valid;
@@ -78,5 +76,48 @@ public class TimeRecordController {
     ) {
         List<TimeRecordResponse> response = timeTrackingService.getRecordsByUserIdAndDate(userId, date, workspaceId);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/pending")
+    public ResponseEntity<com.ap101gamestudio.timetracker.dto.PageResponse<com.ap101gamestudio.timetracker.dto.PendingRecordResponse>> getPendingRecords(
+            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(timeTrackingService.getPendingRecords(authentication.getName(), workspaceId, search, page, size));
+    }
+
+    @PatchMapping("/{id}/approve")
+    public ResponseEntity<Void> approveRecord(
+            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @PathVariable UUID id,
+            Authentication authentication
+    ) {
+        timeTrackingService.approveRecord(authentication.getName(), workspaceId, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/{id}/reject")
+    public ResponseEntity<Void> rejectRecord(
+            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @PathVariable UUID id,
+            Authentication authentication
+    ) {
+        timeTrackingService.rejectRecord(authentication.getName(), workspaceId, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/history")
+    public ResponseEntity<PageResponse<PendingRecordResponse>> getApprovalHistory(
+            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String date,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(timeTrackingService.getApprovalHistory(authentication.getName(), workspaceId, search, date, page, size));
     }
 }

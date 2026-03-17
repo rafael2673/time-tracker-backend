@@ -20,12 +20,18 @@ public interface SpecialDateRepository extends JpaRepository<SpecialDate, UUID> 
 
     @Query("SELECT s FROM SpecialDate s WHERE s.workspace.id = :workspaceId AND " +
             "(s.isRecurring = true OR (s.date >= :startDate AND s.date <= :endDate)) AND " +
-            "(:search IS NULL OR :search = '' OR LOWER(s.description) LIKE LOWER(CONCAT('%', :search, '%')))")
+            "(:search IS NULL OR :search = '' OR LOWER(s.description) LIKE LOWER(CONCAT('%', :search, '%'))) AND " +
+            "(:searchDay IS NULL OR EXTRACT(DAY FROM s.date) = :searchDay) AND " +
+            "(:searchMonth IS NULL OR EXTRACT(MONTH FROM s.date) = :searchMonth) AND " +
+            "(:searchYear IS NULL OR s.isRecurring = true OR EXTRACT(YEAR FROM s.date) = :searchYear)")
     Page<SpecialDate> findRelevantDatesWithSearch(
             @Param("workspaceId") UUID workspaceId,
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate,
             @Param("search") String search,
+            @Param("searchDay") Integer searchDay,
+            @Param("searchMonth") Integer searchMonth,
+            @Param("searchYear") Integer searchYear,
             Pageable pageable
     );
 }

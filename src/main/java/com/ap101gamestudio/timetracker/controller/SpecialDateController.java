@@ -45,10 +45,11 @@ public class SpecialDateController {
             @RequestHeader("X-Workspace-Id") UUID workspaceId,
             @RequestParam int year,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) String exactDate,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        return ResponseEntity.ok(specialDateService.getByYear(workspaceId, year, search, page, size));
+        return ResponseEntity.ok(specialDateService.getByYear(workspaceId, year, search, exactDate, page, size));
     }
 
     @DeleteMapping("/{id}")

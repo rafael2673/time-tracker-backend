@@ -29,10 +29,11 @@ public class WorkspaceController {
     public ResponseEntity<PageResponse<WorkspaceMemberResponse>> getWorkspaceMembers(
             @PathVariable UUID workspaceId,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) String role,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        return ResponseEntity.ok(workspaceService.getWorkspaceMembers(workspaceId, search, page, size));
+        return ResponseEntity.ok(workspaceService.getWorkspaceMembers(workspaceId, search, role, page, size));
     }
 
     @PostMapping("/{workspaceId}/members")

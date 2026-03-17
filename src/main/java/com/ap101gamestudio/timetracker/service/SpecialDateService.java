@@ -14,6 +14,7 @@ import com.ap101gamestudio.timetracker.repository.SpecialDateRepository;
 import com.ap101gamestudio.timetracker.repository.UserRepository;
 import com.ap101gamestudio.timetracker.repository.WorkspaceMembershipRepository;
 import com.ap101gamestudio.timetracker.repository.WorkspaceRepository;
+import com.ap101gamestudio.timetracker.utils.DateFilterUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -70,12 +71,13 @@ public class SpecialDateService {
         return new SpecialDateResponse(saved.getId(), saved.getDate(), saved.getDescription(), saved.getWorkloadMultiplier(), saved.isRecurring());
     }
 
-    public PageResponse<SpecialDateResponse> getByYear(UUID workspaceId, int year, String search, int page, int size) {
+    public PageResponse<SpecialDateResponse> getByYear(UUID workspaceId, int year, String search, String exactDate, int page, int size) {
         LocalDate start = LocalDate.of(year, 1, 1);
         LocalDate end = LocalDate.of(year, 12, 31);
         Pageable pageable = PageRequest.of(page, size, Sort.by("date").ascending());
 
-        Page<SpecialDate> result = specialDateRepository.findRelevantDatesWithSearch(workspaceId, start, end, search, pageable);
+        Integer[] parsed = DateFilterUtils.parseDateFilter(exactDate);
+        Page<SpecialDate> result = specialDateRepository.findRelevantDatesWithSearch(workspaceId, start, end, search, parsed[0], parsed[1], parsed[2], pageable);
 
         List<SpecialDateResponse> content = result.getContent().stream()
                 .map(sd -> new SpecialDateResponse(sd.getId(), sd.getDate(), sd.getDescription(), sd.getWorkloadMultiplier(), sd.isRecurring()))

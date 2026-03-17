@@ -5,7 +5,12 @@ import com.ap101gamestudio.timetracker.exceptions.DomainException;
 import com.ap101gamestudio.timetracker.model.*;
 import com.ap101gamestudio.timetracker.model.enums.RecordSource;
 import com.ap101gamestudio.timetracker.repository.*;
+import com.ap101gamestudio.timetracker.utils.DateFilterUtils;
 import org.springframework.context.MessageSource;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -285,12 +290,15 @@ public class TimeTrackingService {
 
     private double calculateWorkedHours(List<TimeRecord> records) {
         if (records == null || records.isEmpty()) return 0.0;
-        List<TimeRecord> modifiableRecords = new ArrayList<>(records);
+
+        List<TimeRecord> modifiableRecords = records.stream()
+                .filter(r -> !r.isPendingApprovation())
+                .sorted(Comparator.comparing(TimeRecord::getRegisteredAt))
+                .toList();
+
         long totalSeconds = 0;
         LocalDateTime lastEntry = null;
         String currentStatus = "IDLE";
-
-        modifiableRecords.sort(Comparator.comparing(TimeRecord::getRegisteredAt));
 
         for (TimeRecord record : modifiableRecords) {
             LocalDateTime time = record.getRegisteredAt();
@@ -376,5 +384,57 @@ public class TimeTrackingService {
                         (sd.isRecurring() && sd.getDate().getMonth() == date.getMonth() && sd.getDate().getDayOfMonth() == date.getDayOfMonth()))
                 .findFirst()
                 .orElse(null);
+    }
+
+    private void validateManagerAccess(String email, UUID workspaceId) {
+        User user = userRepository.findByEmail(email).orElseThrow(() -> new DomainException("error.user.not_found"));
+        WorkspaceMembership membership = membershipRepository.findByUserIdAndWorkspaceId(user.getId(), workspaceId)
+                .orElseThrow(() -> new DomainException("error.permission.denied"));
+        if (membership.getRole() == com.ap101gamestudio.timetracker.model.enums.UserRole.EMPLOYEE) {
+            throw new DomainException("error.permission.denied");
+        }
+    }
+
+    public PageResponse<PendingRecordResponse> getPendingRecords(String email, UUID workspaceId, String search, int page, int size) {
+        validateManagerAccess(email, workspaceId);
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size, org.springframework.data.domain.Sort.by("registeredAt").descending());
+        org.springframework.data.domain.Page<TimeRecord> result = timeRecordRepository.findPendingWithSearch(workspaceId, search, pageable);
+
+        List<PendingRecordResponse> content = result.getContent().stream()
+                .map(r -> new PendingRecordResponse(r.getId(), r.getUser().getFullName(), r.getRecordType(), r.getRegisteredAt(), r.getJustification()))
+                .toList();
+
+        return new PageResponse<>(content, result.getTotalPages(), result.getTotalElements(), result.getNumber());
+    }
+
+    public void approveRecord(String email, UUID workspaceId, UUID recordId) {
+        validateManagerAccess(email, workspaceId);
+        TimeRecord record = timeRecordRepository.findById(recordId).orElseThrow(() -> new DomainException("error.record.not_found"));
+        if (!record.getWorkspace().getId().equals(workspaceId)) throw new DomainException("error.permission.denied");
+
+        record.setPendingApprovation(false);
+        timeRecordRepository.save(record);
+    }
+
+    public void rejectRecord(String email, UUID workspaceId, UUID recordId) {
+        validateManagerAccess(email, workspaceId);
+        TimeRecord record = timeRecordRepository.findById(recordId).orElseThrow(() -> new DomainException("error.record.not_found"));
+        if (!record.getWorkspace().getId().equals(workspaceId)) throw new DomainException("error.permission.denied");
+
+        timeRecordRepository.delete(record);
+    }
+
+    public PageResponse<PendingRecordResponse> getApprovalHistory(String email, UUID workspaceId, String search, String date, int page, int size) {
+        validateManagerAccess(email, workspaceId);
+        Pageable pageable = PageRequest.of(page, size, Sort.by("registeredAt").descending());
+
+        Integer[] parsed = DateFilterUtils.parseDateFilter(date);
+        Page<TimeRecord> result = timeRecordRepository.findHistoryWithFilters(workspaceId, search, parsed[0], parsed[1], parsed[2], pageable);
+
+        List<PendingRecordResponse> content = result.getContent().stream()
+                .map(r -> new PendingRecordResponse(r.getId(), r.getUser().getFullName(), r.getRecordType(), r.getRegisteredAt(), r.getJustification()))
+                .toList();
+
+        return new PageResponse<>(content, result.getTotalPages(), result.getTotalElements(), result.getNumber());
     }
 }

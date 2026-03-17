@@ -17,8 +17,12 @@ public interface WorkspaceMembershipRepository extends JpaRepository<WorkspaceMe
     List<WorkspaceMembership> findByUserId(UUID userId);
     Optional<WorkspaceMembership> findByUserIdAndWorkspaceId(UUID userId, UUID workspaceId);
     List<WorkspaceMembership> findAllByUserId(UUID userId);
-    List<WorkspaceMembership> findAllByWorkspaceId(UUID workspaceId);
     @Query("SELECT wm FROM WorkspaceMembership wm WHERE wm.workspace.id = :workspaceId AND " +
-            "(:search IS NULL OR :search = '' OR LOWER(wm.user.fullName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(wm.user.email) LIKE LOWER(CONCAT('%', :search, '%')))")
-    Page<WorkspaceMembership> findByWorkspaceIdWithSearch(@Param("workspaceId") UUID workspaceId, @Param("search") String search, Pageable pageable);
+            "(:search IS NULL OR :search = '' OR LOWER(wm.user.fullName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(wm.user.email) LIKE LOWER(CONCAT('%', :search, '%'))) AND " +
+            "(:role IS NULL OR wm.role = :role)")
+    Page<WorkspaceMembership> findByWorkspaceIdWithFilters(
+            @Param("workspaceId") UUID workspaceId,
+            @Param("search") String search,
+            @Param("role") com.ap101gamestudio.timetracker.model.enums.UserRole role,
+            Pageable pageable);
 }

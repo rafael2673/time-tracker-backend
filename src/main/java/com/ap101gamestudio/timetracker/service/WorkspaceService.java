@@ -60,21 +60,14 @@ public class WorkspaceService {
                 .collect(Collectors.toList());
     }
 
-    public PageResponse<WorkspaceMemberResponse> getWorkspaceMembers(UUID workspaceId, String search, int page, int size) {
+    public PageResponse<WorkspaceMemberResponse> getWorkspaceMembers(UUID workspaceId, String search, String roleStr, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("user.fullName").ascending());
-        Page<WorkspaceMembership> result = membershipRepository.findByWorkspaceIdWithSearch(workspaceId, search, pageable);
+        UserRole role = (roleStr != null && !roleStr.isBlank()) ? UserRole.valueOf(roleStr) : null;
+
+        Page<WorkspaceMembership> result = membershipRepository.findByWorkspaceIdWithFilters(workspaceId, search, role, pageable);
 
         List<WorkspaceMemberResponse> content = result.getContent().stream()
-                .map(wm -> new WorkspaceMemberResponse(
-                        wm.getUser().getId(),
-                        wm.getUser().getFullName(),
-                        wm.getUser().getEmail(),
-                        wm.getRole().name(),
-                        wm.getWorkPolicy() != null ? wm.getWorkPolicy().getName() : null,
-                        wm.getWorkPolicy() != null ? wm.getWorkPolicy().getId() : null,
-                        wm.getJoinedAt(),
-                        wm.isActive()
-                ))
+                .map(wm -> new WorkspaceMemberResponse(wm.getUser().getId(), wm.getUser().getFullName(), wm.getUser().getEmail(), wm.getRole().name(), wm.getWorkPolicy() != null ? wm.getWorkPolicy().getName() : null, wm.getWorkPolicy() != null ? wm.getWorkPolicy().getId() : null, wm.getJoinedAt(), wm.isActive()))
                 .toList();
 
         return new PageResponse<>(content, result.getTotalPages(), result.getTotalElements(), result.getNumber());
