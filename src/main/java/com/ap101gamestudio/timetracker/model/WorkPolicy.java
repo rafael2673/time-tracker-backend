@@ -1,5 +1,6 @@
 package com.ap101gamestudio.timetracker.model;
 
+import com.ap101gamestudio.timetracker.model.enums.OvertimeStrategy;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -38,6 +39,13 @@ public class WorkPolicy {
     @Setter
     @Column(name = "working_days", nullable = false)
     private String workingDays;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "overtime_strategy", nullable = false)
+    private OvertimeStrategy overtimeStrategy = OvertimeStrategy.BANK_ONLY;
+
+    @Column(name = "max_bank_hours_per_month", nullable = false)
+    private double maxBankHoursPerMonth = 0.0;
+
 
     protected WorkPolicy() {}
 

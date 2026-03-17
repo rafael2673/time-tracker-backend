@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.17.xsd">
+
+    <changeSet id="18-add-policy-rules" author="rafael">
+        <addColumn tableName="work_policies">
+            <column name="overtime_strategy" type="VARCHAR(50)" defaultValue="BANK_ONLY">
+                <constraints nullable="false"/>
+            </column>
+            <column name="max_bank_hours_per_month" type="DOUBLE" defaultValue="0.0">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20-create-monthly-closures" author="rafael">
+        <createTable tableName="monthly_closures">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="workspace_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="user_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reference_year" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reference_month" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="worked_hours" type="DOUBLE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expected_hours" type="DOUBLE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="raw_balance" type="DOUBLE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="paid_overtime_hours" type="DOUBLE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="banked_hours_delta" type="DOUBLE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="closed_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="monthly_closures" baseColumnNames="workspace_id" constraintName="fk_closure_workspace" referencedTableName="workspaces" referencedColumnNames="id" onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="monthly_closures" baseColumnNames="user_id" constraintName="fk_closure_user" referencedTableName="users" referencedColumnNames="id" onDelete="CASCADE"/>
+        <addUniqueConstraint tableName="monthly_closures" columnNames="workspace_id, user_id, reference_year, reference_month" constraintName="uk_closure_period"/>
+    </changeSet>
+
+</databaseChangeLog>

@@ -33,6 +33,7 @@ public class TimeTrackingService {
     private final MessageSource messageSource;
     private final SpecialDateRepository specialDateRepository;
     private final EmployeeLeaveRepository employeeLeaveRepository;
+    private final MonthlyClosureRepository monthlyClosureRepository;
 
 
     public TimeTrackingService(
@@ -42,7 +43,8 @@ public class TimeTrackingService {
             WorkspaceMembershipRepository membershipRepository,
             MessageSource messageSource,
             SpecialDateRepository specialDateRepository,
-            EmployeeLeaveRepository employeeLeaveRepository
+            EmployeeLeaveRepository employeeLeaveRepository,
+            MonthlyClosureRepository monthlyClosureRepository
     ) {
         this.timeRecordRepository = timeRecordRepository;
         this.userRepository = userRepository;
@@ -51,6 +53,7 @@ public class TimeTrackingService {
         this.messageSource = messageSource;
         this.specialDateRepository = specialDateRepository;
         this.employeeLeaveRepository = employeeLeaveRepository;
+        this.monthlyClosureRepository = monthlyClosureRepository;
     }
 
     public TimeRecordResponse registerPoint(String email, CreateTimeRecordRequest request, UUID workspaceId) {
@@ -217,6 +220,11 @@ public class TimeTrackingService {
     public MonthlyBalanceResponse getMonthlyBalance(String email, int year, int month, UUID workspaceId) {
         User user = userRepository.findByEmail(email).orElseThrow(() -> new DomainException("error.user.not_found"));
         WorkspaceMembership membership = membershipRepository.findByUserIdAndWorkspaceId(user.getId(), workspaceId).orElseThrow(() -> new DomainException("error.permission.denied"));
+
+        var closure = monthlyClosureRepository.findByWorkspaceIdAndUserIdAndReferenceYearAndReferenceMonth(workspaceId, user.getId(), year, month);
+        if (closure.isPresent()) {
+            return new MonthlyBalanceResponse(closure.get().getWorkedHours(), closure.get().getExpectedHours(), closure.get().getRawBalance());
+        }
 
         YearMonth ym = YearMonth.of(year, month);
         LocalDateTime startOfMonth = ym.atDay(1).atStartOfDay();
