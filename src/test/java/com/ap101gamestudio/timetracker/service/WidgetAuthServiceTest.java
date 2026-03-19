@@ -88,7 +88,7 @@ class WidgetAuthServiceTest {
         Mockito.when(apiKeyRepository.findByKeyAndActiveTrue("valid_key")).thenReturn(Optional.of(apiKey));
         Mockito.when(userRepository.findByEmail("test@test.com")).thenReturn(Optional.of(user));
         Mockito.when(membershipRepository.findByUserIdAndWorkspaceId(any(), any())).thenReturn(Optional.empty());
-        Mockito.when(workPolicyRepository.findAll()).thenReturn(List.of(defaultPolicy));
+        Mockito.when(workPolicyRepository.findByWorkspaceId(workspace.getId())).thenReturn(List.of(defaultPolicy));
         Mockito.when(jwtService.generateToken(anyMap(), any(User.class))).thenReturn("valid_jwt_token");
 
         String token = widgetAuthService.authenticateFromWidget(request);

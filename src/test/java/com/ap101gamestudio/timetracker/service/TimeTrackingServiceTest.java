@@ -26,6 +26,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 
 @ExtendWith(MockitoExtension.class)
 class TimeTrackingServiceTest {
@@ -47,6 +48,9 @@ class TimeTrackingServiceTest {
 
     @Mock
     private EmployeeLeaveRepository employeeLeaveRepository;
+
+    @Mock
+    private MonthlyClosureRepository monthlyClosureRepository;
 
     @InjectMocks
     private TimeTrackingService timeTrackingService;
@@ -114,6 +118,7 @@ class TimeTrackingServiceTest {
         Mockito.when(membershipRepository.findByUserIdAndWorkspaceId(any(), any())).thenReturn(Optional.of(membership));
         Mockito.when(specialDateRepository.findRelevantDates(any(), any(), any())).thenReturn(List.of());
         Mockito.when(employeeLeaveRepository.findOverlappingLeaves(any(), any(), any(), any())).thenReturn(List.of());
+        Mockito.when(monthlyClosureRepository.findByWorkspaceIdAndUserIdAndReferenceYearAndReferenceMonth(any(), any(), anyInt(), anyInt())).thenReturn(Optional.empty());
         
         LocalDateTime today = LocalDateTime.now();
         List<TimeRecord> records = List.of(
@@ -143,6 +148,7 @@ class TimeTrackingServiceTest {
         Mockito.when(membershipRepository.findByUserIdAndWorkspaceId(any(), any())).thenReturn(Optional.of(membership));
         Mockito.when(specialDateRepository.findRelevantDates(any(), any(), any())).thenReturn(List.of());
         Mockito.when(employeeLeaveRepository.findOverlappingLeaves(any(), any(), any(), any())).thenReturn(List.of());
+        Mockito.when(monthlyClosureRepository.findByWorkspaceIdAndUserIdAndReferenceYearAndReferenceMonth(any(), any(), anyInt(), anyInt())).thenReturn(Optional.empty());
         
         LocalDateTime today = LocalDateTime.now();
         List<TimeRecord> records = List.of(
@@ -176,6 +182,7 @@ class TimeTrackingServiceTest {
         Mockito.when(membershipRepository.findByUserIdAndWorkspaceId(any(), any())).thenReturn(Optional.of(membership));
         Mockito.when(specialDateRepository.findRelevantDates(any(), any(), any())).thenReturn(List.of());
         Mockito.when(employeeLeaveRepository.findOverlappingLeaves(any(), any(), any(), any())).thenReturn(List.of());
+        Mockito.when(monthlyClosureRepository.findByWorkspaceIdAndUserIdAndReferenceYearAndReferenceMonth(any(), any(), anyInt(), anyInt())).thenReturn(Optional.empty());
         
         LocalDateTime today = LocalDateTime.now();
         TimeRecord oldRecord = new TimeRecord(user, workspace, RecordType.ENTRY, RecordSource.MANUAL, today.withHour(8).withMinute(0), null, null);
@@ -216,6 +223,7 @@ class TimeTrackingServiceTest {
         
         EmployeeLeave leave = new EmployeeLeave(workspace, user, LocalDate.of(2023, 1, 9), LocalDate.of(2023, 1, 10), "Vacation");
         Mockito.when(employeeLeaveRepository.findOverlappingLeaves(any(), any(), any(), any())).thenReturn(List.of(leave));
+        Mockito.when(monthlyClosureRepository.findByWorkspaceIdAndUserIdAndReferenceYearAndReferenceMonth(any(), any(), anyInt(), anyInt())).thenReturn(Optional.empty());
         
         Mockito.when(timeRecordRepository.findByUserIdAndWorkspaceIdAndRegisteredAtBetween(any(), any(), any(), any())).thenReturn(List.of());
 

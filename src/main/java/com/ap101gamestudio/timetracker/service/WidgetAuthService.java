@@ -1,12 +1,12 @@
 package com.ap101gamestudio.timetracker.service;
 
-import com.ap101gamestudio.timetracker.model.Workspace;
-import com.ap101gamestudio.timetracker.model.WorkspaceMembership;
-import com.ap101gamestudio.timetracker.model.WorkPolicy;
-import com.ap101gamestudio.timetracker.model.enums.UserRole;
-import com.ap101gamestudio.timetracker.model.User;
 import com.ap101gamestudio.timetracker.dto.WidgetLoginRequest;
 import com.ap101gamestudio.timetracker.exceptions.DomainException;
+import com.ap101gamestudio.timetracker.model.User;
+import com.ap101gamestudio.timetracker.model.WorkPolicy;
+import com.ap101gamestudio.timetracker.model.Workspace;
+import com.ap101gamestudio.timetracker.model.WorkspaceMembership;
+import com.ap101gamestudio.timetracker.model.enums.UserRole;
 import com.ap101gamestudio.timetracker.repository.ApiKeyRepository;
 import com.ap101gamestudio.timetracker.repository.UserRepository;
 import com.ap101gamestudio.timetracker.repository.WorkPolicyRepository;
@@ -45,11 +45,15 @@ public class WidgetAuthService {
         Workspace workspace = apiKey.getWorkspace();
 
         var user = userRepository.findByEmail(request.email())
-                .orElseGet(() -> createSilentUser(request, workspace));
+                .orElseGet(() -> createSilentUser(request));
 
         if (membershipRepository.findByUserIdAndWorkspaceId(user.getId(), workspace.getId()).isEmpty()) {
-            WorkPolicy defaultPolicy = workPolicyRepository.findAll().stream().findFirst()
-                    .orElseThrow(() -> new DomainException("error.work_policy.not_found"));
+
+            WorkPolicy defaultPolicy = workPolicyRepository.findByWorkspaceId(workspace.getId())
+                    .stream()
+                    .findFirst()
+                    .orElse(null);
+
             membershipRepository.save(new WorkspaceMembership(user, workspace, UserRole.EMPLOYEE, defaultPolicy));
         }
 
@@ -59,7 +63,7 @@ public class WidgetAuthService {
         return jwtService.generateToken(extraClaims, user);
     }
 
-    private User createSilentUser(WidgetLoginRequest request, Workspace workspace) {
+    private User createSilentUser(WidgetLoginRequest request) {
         String email = request.email();
         String name = (request.name() != null && !request.name().isBlank()) ? request.name() : request.email().split("@")[0];
         String password = passwordEncoder.encode(UUID.randomUUID().toString());
