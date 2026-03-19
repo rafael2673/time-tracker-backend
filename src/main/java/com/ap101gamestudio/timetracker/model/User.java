@@ -45,6 +45,11 @@ public class User implements UserDetails {
     @Column(name = "has_web_password", nullable = false)
     private boolean hasWebPassword = false;
 
+    @Getter
+    @Setter
+    @Column(name = "system_admin", nullable = false)
+    private boolean systemAdmin = false;
+
     protected User() {}
 
     public User(String email, String passwordHash, String fullName) {

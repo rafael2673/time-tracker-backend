@@ -50,6 +50,9 @@ public class WorkspaceMembership {
     @Column(nullable = false)
     private boolean active = true;
 
+    @Column(name = "is_system_admin", nullable = false)
+    private final boolean systemAdmin = false;
+
     protected WorkspaceMembership() {}
 
     public WorkspaceMembership(User user, Workspace workspace, UserRole role, WorkPolicy workPolicy) {

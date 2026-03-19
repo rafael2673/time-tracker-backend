@@ -65,9 +65,15 @@ public class WidgetAuthService {
 
     private User createSilentUser(WidgetLoginRequest request) {
         String email = request.email();
-        String name = (request.name() != null && !request.name().isBlank()) ? request.name() : request.email().split("@")[0];
-        String password = passwordEncoder.encode(UUID.randomUUID().toString());
+        String fullName = (request.name() != null && !request.name().isBlank()) 
+            ? request.name() 
+            : email.split("@")[0];
+        String hashedPassword = passwordEncoder.encode(UUID.randomUUID().toString());
 
-        return userRepository.save(new User(email, password, name));
+        User newUser = new User(email, hashedPassword, fullName);
+        newUser.setHasWebPassword(false);
+        newUser.setSystemAdmin(false);
+
+        return userRepository.save(newUser);
     }
 }

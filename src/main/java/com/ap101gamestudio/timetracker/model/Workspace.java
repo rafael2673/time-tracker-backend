@@ -1,9 +1,13 @@
 package com.ap101gamestudio.timetracker.model;
 
 import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+
 import java.util.UUID;
 
 @Entity
+@Getter
 @Table(name = "workspaces")
 public class Workspace {
 
@@ -11,6 +15,7 @@ public class Workspace {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    @Setter
     @Column(nullable = false)
     private String name;
 
@@ -44,10 +49,4 @@ public class Workspace {
         this.longitude = longitude;
         this.radiusMeters = radiusMeters;
     }
-
-    public UUID getId() { return id; }
-    public String getName() { return name; }
-    public Double getLatitude() { return latitude; }
-    public Double getLongitude() { return longitude; }
-    public Integer getRadiusMeters() { return radiusMeters; }
 }
