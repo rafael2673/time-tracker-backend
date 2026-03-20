@@ -46,12 +46,21 @@ public class MonthlyClosure {
     @Column(name = "banked_hours_delta", nullable = false)
     private double bankedHoursDelta;
 
+    @Column(name = "accumulated_bank_hours", nullable = false)
+    private double accumulatedBankHours;
+
     @Column(name = "closed_at", nullable = false)
     private LocalDateTime closedAt;
 
     protected MonthlyClosure() {}
 
-    public MonthlyClosure(Workspace workspace, User user, int referenceYear, int referenceMonth, double workedHours, double expectedHours, double rawBalance, double paidOvertimeHours, double bankedHoursDelta) {
+    public MonthlyClosure(
+            Workspace workspace, User user, int referenceYear,
+            int referenceMonth, double workedHours,
+            double expectedHours, double rawBalance,
+            double paidOvertimeHours, double bankedHoursDelta,
+            double accumulatedBankHours
+    ) {
         this.workspace = workspace;
         this.user = user;
         this.referenceYear = referenceYear;
@@ -61,6 +70,7 @@ public class MonthlyClosure {
         this.rawBalance = rawBalance;
         this.paidOvertimeHours = paidOvertimeHours;
         this.bankedHoursDelta = bankedHoursDelta;
+        this.accumulatedBankHours = accumulatedBankHours;
         this.closedAt = LocalDateTime.now();
     }
 }

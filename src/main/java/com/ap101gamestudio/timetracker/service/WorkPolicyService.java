@@ -57,6 +57,10 @@ public class WorkPolicyService {
                 request.workingDays()
         );
 
+        policy.setOvertimeStrategy(request.overtimeStrategy());
+        policy.setMaxBankHoursPerMonth(request.maxBankHoursPerMonth());
+        policy.setBankExpirationMonths(request.bankExpirationMonths());
+
         return policyRepository.save(policy);
     }
 
@@ -75,6 +79,9 @@ public class WorkPolicyService {
         policy.setDailyMinutesLimit(request.dailyMinutesLimit());
         policy.setToleranceMinutes(request.toleranceMinutes());
         policy.setWorkingDays(request.workingDays());
+        policy.setOvertimeStrategy(request.overtimeStrategy());
+        policy.setMaxBankHoursPerMonth(request.maxBankHoursPerMonth());
+        policy.setBankExpirationMonths(request.bankExpirationMonths());
 
         return policyRepository.save(policy);
     }

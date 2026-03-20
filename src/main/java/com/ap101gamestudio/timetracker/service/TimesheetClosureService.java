@@ -1,6 +1,6 @@
 package com.ap101gamestudio.timetracker.service;
 
-import com.ap101gamestudio.timetracker.dto.MonthlyClosureResponse;
+import com.ap101gamestudio.timetracker.dto.*;
 import com.ap101gamestudio.timetracker.exceptions.DomainException;
 import com.ap101gamestudio.timetracker.model.*;
 import com.ap101gamestudio.timetracker.model.enums.OvertimeStrategy;
@@ -9,7 +9,6 @@ import com.ap101gamestudio.timetracker.repository.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -37,65 +36,137 @@ public class TimesheetClosureService {
     @Transactional
     public List<MonthlyClosureResponse> closeWorkspaceMonth(String email, UUID workspaceId, int year, int month) {
         validateManagerAccess(email, workspaceId);
+        validateMonthNotAlreadyClosed(workspaceId, year, month);
 
+        List<WorkspaceMembership> activeMembers = getActiveMembers(workspaceId);
+        PreviousMonthDto previousMonth = getPreviousMonth(year, month);
+
+        return activeMembers.stream()
+                .map(member -> processAndSaveMemberClosure(member, workspaceId, year, month, previousMonth))
+                .toList();
+    }
+
+    private void validateMonthNotAlreadyClosed(UUID workspaceId, int year, int month) {
         if (closureRepository.existsByWorkspaceIdAndReferenceYearAndReferenceMonth(workspaceId, year, month)) {
             throw new DomainException("error.closure.already_closed");
         }
+    }
 
-        List<WorkspaceMembership> activeMembers = membershipRepository.findByWorkspaceId(workspaceId)
-                .stream().filter(WorkspaceMembership::isActive).toList();
+    private List<WorkspaceMembership> getActiveMembers(UUID workspaceId) {
+        return membershipRepository.findByWorkspaceId(workspaceId)
+                .stream()
+                .filter(WorkspaceMembership::isActive)
+                .toList();
+    }
 
-        List<MonthlyClosureResponse> responses = new ArrayList<>();
+    private PreviousMonthDto getPreviousMonth(int year, int month) {
+        int prevYear = (month == 1) ? year - 1 : year;
+        int prevMonth = (month == 1) ? 12 : month - 1;
+        return new PreviousMonthDto(prevYear, prevMonth);
+    }
 
-        for (WorkspaceMembership member : activeMembers) {
-            var balance = timeTrackingService.getMonthlyBalance(member.getUser().getEmail(), year, month, workspaceId);
+    private MonthlyClosureResponse processAndSaveMemberClosure(WorkspaceMembership member, UUID workspaceId, int year, int month, PreviousMonthDto previousMonth) {
+        var balance = timeTrackingService.getMonthlyBalance(member.getUser().getEmail(), year, month, workspaceId);
+        WorkPolicy policy = member.getWorkPolicy();
 
-            double rawBalance = balance.balance();
-            double paidOvertime = 0.0;
-            double bankedDelta = 0.0;
+        var overtimeCalculation = calculateOvertime(balance.balance(), policy);
+        var accumulation = calculateAccumulation(member.getUser().getId(), workspaceId, previousMonth, overtimeCalculation.bankedDelta());
 
-            WorkPolicy policy = member.getWorkPolicy();
+        var finalBalances = applyExpirationRules(overtimeCalculation, accumulation, policy, month);
 
-            if (rawBalance > 0) {
-                if (policy.getOvertimeStrategy() == OvertimeStrategy.PAY_ONLY) {
-                    paidOvertime = rawBalance;
-                } else if (policy.getOvertimeStrategy() == OvertimeStrategy.BANK_ONLY) {
-                    bankedDelta = rawBalance;
-                } else if (policy.getOvertimeStrategy() == OvertimeStrategy.MIXED) {
-                    if (rawBalance <= policy.getMaxBankHoursPerMonth()) {
-                        bankedDelta = rawBalance;
-                    } else {
-                        bankedDelta = policy.getMaxBankHoursPerMonth();
-                        paidOvertime = rawBalance - bankedDelta;
-                    }
-                }
-            } else if (rawBalance < 0) {
-                bankedDelta = rawBalance;
-            }
+        MonthlyClosure closure = saveClosure(member, year, month, balance, finalBalances.overtime(), finalBalances.accumulation());
+        return mapToResponse(closure);
+    }
 
-            MonthlyClosure closure = new MonthlyClosure(
-                    member.getWorkspace(),
-                    member.getUser(),
-                    year, month,
-                    balance.workedHours(),
-                    balance.expectedHours(),
-                    rawBalance,
-                    paidOvertime,
-                    bankedDelta
-            );
-
-            MonthlyClosure saved = closureRepository.save(closure);
-            responses.add(new MonthlyClosureResponse(saved.getId(), member.getUser().getFullName(), year, month, balance.workedHours(), balance.expectedHours(), rawBalance, paidOvertime, bankedDelta, saved.getClosedAt()));
+    private ExpirationResultDto applyExpirationRules(OvertimeCalculationDto overtime, BankAccumulationDto accumulation, WorkPolicy policy, int month) {
+        if (policy == null || policy.getBankExpirationMonths() <= 0 || month % policy.getBankExpirationMonths() != 0) {
+            return new ExpirationResultDto(overtime, accumulation);
         }
 
-        return responses;
+        double finalAccumulated = accumulation.newAccumulated();
+        OvertimeCalculationDto newOvertime = overtime;
+
+        if (finalAccumulated > 0) {
+            newOvertime = new OvertimeCalculationDto(
+                    overtime.paidOvertimeHours() + finalAccumulated,
+                    overtime.bankedDelta()
+            );
+        }
+
+        BankAccumulationDto newAccumulation = new BankAccumulationDto(accumulation.previousAccumulated(), 0.0);
+
+        return new ExpirationResultDto(newOvertime, newAccumulation);
+    }
+
+    private OvertimeCalculationDto calculateOvertime(double rawBalance, WorkPolicy policy) {
+        OvertimeStrategy strategy = (policy != null) ? policy.getOvertimeStrategy() : OvertimeStrategy.BANK_ONLY;
+        double maxBankHours = (policy != null) ? policy.getMaxBankHoursPerMonth() : 0.0;
+
+        if (rawBalance > 0) {
+            return switch (strategy) {
+                case PAY_ONLY -> new OvertimeCalculationDto(rawBalance, 0.0);
+                case BANK_ONLY -> new OvertimeCalculationDto(0.0, rawBalance);
+                case MIXED -> calculateMixedOvertime(rawBalance, maxBankHours);
+            };
+        } else if (rawBalance < 0) {
+            return new OvertimeCalculationDto(0.0, rawBalance);
+        }
+        return new OvertimeCalculationDto(0.0, 0.0);
+    }
+
+    private OvertimeCalculationDto calculateMixedOvertime(double rawBalance, double maxBankHours) {
+        if (rawBalance <= maxBankHours) {
+            return new OvertimeCalculationDto(0.0, rawBalance);
+        }
+        return new OvertimeCalculationDto(rawBalance - maxBankHours, maxBankHours);
+    }
+
+    private BankAccumulationDto calculateAccumulation(UUID userId, UUID workspaceId, PreviousMonthDto previousMonth, double bankedDelta) {
+        double previousAccumulated = closureRepository
+                .findByWorkspaceIdAndUserIdAndReferenceYearAndReferenceMonth(workspaceId, userId, previousMonth.year(), previousMonth.month())
+                .map(MonthlyClosure::getAccumulatedBankHours)
+                .orElse(0.0);
+
+        return new BankAccumulationDto(previousAccumulated, previousAccumulated + bankedDelta);
+    }
+
+    private MonthlyClosure saveClosure(WorkspaceMembership member, int year, int month, MonthlyBalanceResponse balance, OvertimeCalculationDto overtime, BankAccumulationDto accumulation) {
+        MonthlyClosure closure = new MonthlyClosure(
+                member.getWorkspace(),
+                member.getUser(),
+                year, month,
+                balance.workedHours(),
+                balance.expectedHours(),
+                balance.balance(),
+                overtime.paidOvertimeHours(),
+                overtime.bankedDelta(),
+                accumulation.newAccumulated()
+        );
+        return closureRepository.save(closure);
+    }
+
+    private MonthlyClosureResponse mapToResponse(MonthlyClosure closure) {
+        return new MonthlyClosureResponse(
+                closure.getId(),
+                closure.getUser().getId(),
+                closure.getUser().getFullName(),
+                closure.getReferenceYear(),
+                closure.getReferenceMonth(),
+                closure.getWorkedHours(),
+                closure.getExpectedHours(),
+                closure.getRawBalance(),
+                closure.getPaidOvertimeHours(),
+                closure.getBankedHoursDelta(),
+                closure.getAccumulatedBankHours(),
+                closure.getClosedAt()
+        );
     }
 
     public List<MonthlyClosureResponse> getClosures(String email, UUID workspaceId, int year, int month) {
         validateManagerAccess(email, workspaceId);
         return closureRepository.findByWorkspaceIdAndReferenceYearAndReferenceMonth(workspaceId, year, month)
                 .stream()
-                .map(c -> new MonthlyClosureResponse(c.getId(), c.getUser().getFullName(), c.getReferenceYear(), c.getReferenceMonth(), c.getWorkedHours(), c.getExpectedHours(), c.getRawBalance(), c.getPaidOvertimeHours(), c.getBankedHoursDelta(), c.getClosedAt()))
+                .map(this::mapToResponse)
                 .toList();
     }
 }

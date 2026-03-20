@@ -47,7 +47,7 @@ public class User implements UserDetails {
 
     @Getter
     @Setter
-    @Column(name = "system_admin", nullable = false)
+    @Column(name = "is_system_admin", nullable = false)
     private boolean systemAdmin = false;
 
     protected User() {}

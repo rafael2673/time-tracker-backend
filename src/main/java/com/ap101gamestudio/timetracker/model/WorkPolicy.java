@@ -14,6 +14,7 @@ import java.util.stream.Collectors;
 @Entity
 @Table(name = "work_policies")
 @Getter
+@Setter
 public class WorkPolicy {
 
     @Id
@@ -24,27 +25,27 @@ public class WorkPolicy {
     @JoinColumn(name = "workspace_id", nullable = false)
     private Workspace workspace;
 
-    @Setter
     @Column(nullable = false)
     private String name;
 
-    @Setter
     @Column(name = "daily_minutes_limit", nullable = false)
     private int dailyMinutesLimit;
 
-    @Setter
     @Column(name = "tolerance_minutes", nullable = false)
     private int toleranceMinutes;
 
-    @Setter
     @Column(name = "working_days", nullable = false)
     private String workingDays;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "overtime_strategy", nullable = false)
     private OvertimeStrategy overtimeStrategy = OvertimeStrategy.BANK_ONLY;
 
     @Column(name = "max_bank_hours_per_month", nullable = false)
     private double maxBankHoursPerMonth = 0.0;
+
+    @Column(name = "bank_expiration_months", nullable = false)
+    private int bankExpirationMonths = 0;
 
 
     protected WorkPolicy() {}
