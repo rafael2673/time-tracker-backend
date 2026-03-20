@@ -19,6 +19,7 @@ import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.format.TextStyle;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -38,7 +39,9 @@ public class ReportService {
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-    private static final Locale PT_BR = new Locale("pt", "BR");
+    private static final DateTimeFormatter MONTH_YEAR_FORMATTER = DateTimeFormatter.ofPattern("MM/yyyy");
+    private static final Locale PT_BR = Locale.forLanguageTag("pt-BR");
+    private static final int COLUMN_COUNT = 12;
 
     public ReportService(
             TimeRecordRepository recordRepository,
@@ -127,6 +130,7 @@ public class ReportService {
             Sheet sheet = workbook.createSheet(yearMonth.format(DateTimeFormatter.ofPattern("MM-yyyy")));
             ReportStyles styles = createStyles(workbook);
 
+            configureSheetLayout(sheet);
             createDocumentHeader(sheet, user, workspace, yearMonth, styles);
             createTableHeader(sheet, styles);
 
@@ -142,87 +146,185 @@ public class ReportService {
         }
     }
 
+    private void configureSheetLayout(Sheet sheet) {
+        sheet.createFreezePane(0, 5);
+        sheet.setFitToPage(true);
+        sheet.setHorizontallyCenter(true);
+        sheet.setAutobreaks(true);
+
+        sheet.setMargin(PageMargin.LEFT, 0.2);
+        sheet.setMargin(PageMargin.RIGHT, 0.2);
+        sheet.setMargin(PageMargin.TOP, 0.25);
+        sheet.setMargin(PageMargin.BOTTOM, 0.25);
+
+        PrintSetup printSetup = sheet.getPrintSetup();
+        printSetup.setLandscape(true);
+        printSetup.setFitWidth((short) 1);
+        printSetup.setFitHeight((short) 1);
+    }
+
     private long fillMonthRows(Sheet sheet, YearMonth yearMonth, WorkspaceMembership membership, Map<LocalDate, List<TimeRecord>> recordsByDay, List<SpecialDate> monthHolidays, ReportStyles styles) {
         int rowIndex = 5;
         long totalWorkedMinutesMonth = 0;
+        long weeklyWorkedMinutes = 0;
+        int weekStartRow = rowIndex;
 
         for (int day = 1; day <= yearMonth.lengthOfMonth(); day++) {
             LocalDate currentDate = yearMonth.atDay(day);
-            Row row = sheet.createRow(rowIndex++);
-            totalWorkedMinutesMonth += processDailyRow(row, currentDate, membership, recordsByDay, monthHolidays, styles);
+            Row row = sheet.createRow(rowIndex);
+            row.setHeightInPoints(16);
+
+            DailyRowResult dailyResult = processDailyRow(row, currentDate, membership, recordsByDay, monthHolidays, styles);
+            totalWorkedMinutesMonth += dailyResult.workedMinutes();
+            weeklyWorkedMinutes += dailyResult.workedMinutes();
+
+            boolean weekClosed = currentDate.getDayOfWeek() == DayOfWeek.SUNDAY || day == yearMonth.lengthOfMonth();
+            if (weekClosed) {
+                String weeklyTotal = formatMinutesToHHMM(weeklyWorkedMinutes);
+
+                if (weekStartRow < rowIndex) {
+                    sheet.addMergedRegion(new CellRangeAddress(weekStartRow, rowIndex, 9, 9));
+                    Row anchorRow = sheet.getRow(weekStartRow);
+                    if (anchorRow != null) {
+                        createCell(anchorRow, 9, weeklyTotal, styles.weeklyTotalStyle());
+                    }
+
+                    for (int i = weekStartRow + 1; i <= rowIndex; i++) {
+                        Row fillRow = sheet.getRow(i);
+                        if (fillRow != null && fillRow.getCell(9) == null) {
+                            createCell(fillRow, 9, "", styles.weeklyTotalStyle());
+                        }
+                    }
+                } else {
+                    createCell(row, 9, weeklyTotal, styles.weeklyTotalStyle());
+                }
+
+                weeklyWorkedMinutes = 0;
+                weekStartRow = rowIndex + 1;
+            } else {
+                createCell(row, 9, "", styles.dataStyle());
+            }
+
+            rowIndex++;
         }
 
         return totalWorkedMinutesMonth;
     }
 
-    private long processDailyRow(Row row, LocalDate currentDate, WorkspaceMembership membership, Map<LocalDate, List<TimeRecord>> recordsByDay, List<SpecialDate> monthHolidays, ReportStyles styles) {
+    private DailyRowResult processDailyRow(Row row, LocalDate currentDate, WorkspaceMembership membership, Map<LocalDate, List<TimeRecord>> recordsByDay, List<SpecialDate> monthHolidays, ReportStyles styles) {
         String dayName = currentDate.getDayOfWeek().getDisplayName(TextStyle.FULL, PT_BR);
 
-        Optional<SpecialDate> holiday = monthHolidays.stream()
-                .filter(h -> h.getDate().equals(currentDate))
-                .findFirst();
+        Optional<SpecialDate> specialDate = findMatchingSpecialDate(monthHolidays, currentDate);
 
         boolean isWorkingDay = isWorkingDay(currentDate.getDayOfWeek(), membership.getWorkPolicy());
+        CellStyle baseDataStyle = styles.dataStyle();
 
-        if (holiday.isPresent()) {
-            fillExceptionRow(row, currentDate, dayName, "FERIADO: " + holiday.get().getDescription().toUpperCase(), styles.weekendStyle());
-            return 0;
+        if (specialDate.isPresent() && isFullDayHoliday(specialDate.get())) {
+            String holidayJustification = formatHolidayJustification(specialDate.get().getDescription());
+            fillExceptionRow(row, currentDate, dayName, "FERIADO", holidayJustification, styles.weekendStyle());
+            return new DailyRowResult(0, styles.weekendStyle());
         }
 
         if (!isWorkingDay) {
-            fillExceptionRow(row, currentDate, dayName, "FINAL DE SEMANA", styles.weekendStyle());
-            return 0;
+            fillExceptionRow(row, currentDate, dayName, "FINAL DE SEMANA", "FINAL DE SEMANA", styles.weekendStyle());
+            return new DailyRowResult(0, styles.weekendStyle());
         }
 
         List<TimeRecord> dailyRecords = recordsByDay.getOrDefault(currentDate, List.of());
-        return fillWorkingDayRow(row, currentDate, dayName, dailyRecords, styles.dataStyle());
+        
+        String partialHolidayDesc = specialDate
+                .filter(sd -> !isFullDayHoliday(sd))
+                .map(SpecialDate::getDescription)
+                .map(this::normalizeDescription)
+                .orElse(null);
+        
+        long workedMinutes = fillWorkingDayRow(row, currentDate, dayName, dailyRecords, baseDataStyle, styles, partialHolidayDesc);
+        return new DailyRowResult(workedMinutes, baseDataStyle);
+    }
+
+    private String formatHolidayJustification(String description) {
+        String normalized = normalizeDescription(description);
+        if (normalized.startsWith("FERIADO")) {
+            return normalized;
+        }
+        return "FERIADO: " + normalized;
     }
 
     private void createDocumentHeader(Sheet sheet, User user, Workspace workspace, YearMonth yearMonth, ReportStyles styles) {
         Row row0 = sheet.createRow(0);
+        row0.setHeightInPoints(28);
         Cell titleCell = row0.createCell(0);
         titleCell.setCellValue("FOLHA DE PONTO INDIVIDUAL");
         titleCell.setCellStyle(styles.titleStyle());
-        sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 8));
+        sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, COLUMN_COUNT - 1));
+
+        Row row1 = sheet.createRow(1);
+        row1.setHeightInPoints(20);
+        Cell subtitleCell = row1.createCell(0);
+        subtitleCell.setCellValue("Consolidado mensal de registros de jornada");
+        subtitleCell.setCellStyle(styles.subtitleStyle());
+        sheet.addMergedRegion(new CellRangeAddress(1, 1, 0, COLUMN_COUNT - 1));
 
         Row row2 = sheet.createRow(2);
-        createCell(row2, 0, "Colaborador:", styles.boldStyle());
-        createCell(row2, 1, user.getFullName(), styles.normalStyle());
-        createCell(row2, 6, "Mês/Ano:", styles.boldStyle());
-        createCell(row2, 7, yearMonth.format(DateTimeFormatter.ofPattern("MM/yyyy")), styles.normalStyle());
+        createCell(row2, 0, "Colaborador", styles.metaLabelStyle());
+        createCell(row2, 1, user.getFullName(), styles.metaValueStyle());
+        createCell(row2, 6, "Mês/Ano", styles.metaLabelStyle());
+        createCell(row2, 7, yearMonth.format(MONTH_YEAR_FORMATTER), styles.metaValueStyle());
 
         Row row3 = sheet.createRow(3);
-        createCell(row3, 0, "Empresa:", styles.boldStyle());
-        createCell(row3, 1, workspace.getName(), styles.normalStyle());
+        createCell(row3, 0, "Empresa", styles.metaLabelStyle());
+        createCell(row3, 1, workspace.getName(), styles.metaValueStyle());
+        createCell(row3, 6, "Gerado em", styles.metaLabelStyle());
+        createCell(row3, 7, LocalDate.now().format(DATE_FORMATTER), styles.metaValueStyle());
     }
 
     private void createTableHeader(Sheet sheet, ReportStyles styles) {
         Row header = sheet.createRow(4);
-        String[] columns = {"Data", "Dia da Semana", "Entrada", "Saída Almoço", "Retorno Almoço", "Duração Almoço", "Saída", "Total Trabalhado", "Observação"};
+        header.setHeightInPoints(24);
+        String[] columns = {
+                "Data",
+                "Dia da semana",
+                "Hora Entrada",
+                "Hora Saída Almoço",
+                "Hora Entrada Almoço",
+                "Duração Intervalo",
+                "Hora Saída",
+                "Total sem intervalo",
+                "Horas trabalhadas",
+                "Horas semanais",
+                "Justificativa",
+                "Observação"
+        };
 
         for (int i = 0; i < columns.length; i++) {
             createCell(header, i, columns[i], styles.headerStyle());
         }
     }
 
-    private void fillExceptionRow(Row row, LocalDate date, String dayName, String justification, CellStyle style) {
+    private void fillExceptionRow(Row row, LocalDate date, String dayName, String observation, String justification, CellStyle style) {
         createCell(row, 0, date.format(DATE_FORMATTER), style);
         createCell(row, 1, dayName, style);
 
-        for (int i = 2; i <= 7; i++) {
+        for (int i = 2; i <= 9; i++) {
             createCell(row, i, "-", style);
         }
-        createCell(row, 8, justification, style);
+
+        createCell(row, 10, justification, style);
+        createCell(row, 11, observation, style);
     }
 
-    private long fillWorkingDayRow(Row row, LocalDate date, String dayName, List<TimeRecord> records, CellStyle style) {
+    private long fillWorkingDayRow(Row row, LocalDate date, String dayName, List<TimeRecord> records, CellStyle style, ReportStyles styles, String partialHolidayDesc) {
         createCell(row, 0, date.format(DATE_FORMATTER), style);
         createCell(row, 1, dayName, style);
 
         Optional<TimeRecord> entry = records.stream().filter(r -> r.getRecordType() == RecordType.ENTRY).findFirst();
         Optional<TimeRecord> pauseStart = records.stream().filter(r -> r.getRecordType() == RecordType.PAUSE_START).findFirst();
-        Optional<TimeRecord> pauseEnd = records.stream().filter(r -> r.getRecordType() == RecordType.PAUSE_END).reduce((first, second) -> second);
-        Optional<TimeRecord> exit = records.stream().filter(r -> r.getRecordType() == RecordType.EXIT).reduce((first, second) -> second);
+        Optional<TimeRecord> pauseEnd = records.stream()
+                .filter(r -> r.getRecordType() == RecordType.PAUSE_END)
+                .max(Comparator.comparing(TimeRecord::getRegisteredAt));
+        Optional<TimeRecord> exit = records.stream()
+                .filter(r -> r.getRecordType() == RecordType.EXIT)
+                .max(Comparator.comparing(TimeRecord::getRegisteredAt));
 
         createCell(row, 2, entry.map(r -> r.getRegisteredAt().format(TIME_FORMATTER)).orElse(""), style);
         createCell(row, 3, pauseStart.map(r -> r.getRegisteredAt().format(TIME_FORMATTER)).orElse(""), style);
@@ -238,44 +340,105 @@ public class ReportService {
 
         createCell(row, 6, exit.map(r -> r.getRegisteredAt().format(TIME_FORMATTER)).orElse(""), style);
 
+        long totalShiftMinutes = 0;
         long workedMinutes = 0;
         if (entry.isPresent() && exit.isPresent()) {
-            long totalShift = Duration.between(entry.get().getRegisteredAt(), exit.get().getRegisteredAt()).toMinutes();
-            workedMinutes = totalShift - pauseMinutes;
-            createCell(row, 7, formatMinutesToHHMM(workedMinutes), style);
-        } else {
-            createCell(row, 7, "", style);
+            totalShiftMinutes = Duration.between(entry.get().getRegisteredAt(), exit.get().getRegisteredAt()).toMinutes();
+            workedMinutes = totalShiftMinutes - pauseMinutes;
         }
 
+        createCell(row, 7, totalShiftMinutes > 0 ? formatMinutesToHHMM(totalShiftMinutes) : "", style);
+        createCell(row, 8, workedMinutes > 0 ? formatMinutesToHHMM(workedMinutes) : "", style);
+
+        String justification;
         String observation = records.isEmpty() ? "FALTA" : "";
-        createCell(row, 8, observation, style);
+
+        if (partialHolidayDesc != null) {
+            justification = partialHolidayDesc;
+            observation = observation.isEmpty() ? "MEIO EXPEDIENTE" : observation + " - MEIO EXPEDIENTE";
+        } else {
+            justification = records.stream()
+                    .map(TimeRecord::getJustification)
+                    .filter(j -> j != null && !j.isBlank())
+                    .findFirst()
+                    .orElse("");
+        }
+        
+        createCell(row, 10, justification, styles.justificationStyle());
+        createCell(row, 11, observation, style);
 
         return workedMinutes;
     }
 
+    private Optional<SpecialDate> findMatchingSpecialDate(List<SpecialDate> specialDates, LocalDate date) {
+        return specialDates.stream()
+                .filter(sd -> sd.getDate().equals(date)
+                        || (sd.isRecurring()
+                        && sd.getDate().getMonth() == date.getMonth()
+                        && sd.getDate().getDayOfMonth() == date.getDayOfMonth()))
+                .findFirst();
+    }
+
+    private boolean isFullDayHoliday(SpecialDate specialDate) {
+        Double multiplier = specialDate.getWorkloadMultiplier();
+        return multiplier == null || multiplier <= 0.0;
+    }
+
+    private String normalizeDescription(String description) {
+        return description == null ? "" : description.trim().toUpperCase();
+    }
+
     private void createDocumentFooter(Sheet sheet, int lastRowIndex, long totalMinutes, String userName, ReportStyles styles) {
-        int rowIndex = lastRowIndex + 2;
+        int rowIndex = lastRowIndex + 1;
 
         Row totalRow = sheet.createRow(rowIndex++);
-        createCell(totalRow, 6, "Total do Mês:", styles.boldStyle());
-        createCell(totalRow, 7, formatMinutesToHHMM(totalMinutes), styles.boldStyle());
+        totalRow.setHeightInPoints(20);
 
-        rowIndex += 3;
+        for (int i = 0; i < 7; i++) {
+            createCell(totalRow, i, "", styles.totalBandStyle());
+        }
+        sheet.addMergedRegion(new CellRangeAddress(rowIndex - 1, rowIndex - 1, 0, 6));
 
-        Row signatureRow = sheet.createRow(rowIndex++);
-        createCell(signatureRow, 1, "________________________________________________", styles.normalStyle());
-        createCell(signatureRow, 5, "________________________________________________", styles.normalStyle());
+        createCell(totalRow, 7, "TOTAL MÊS", styles.totalLabelStyle());
+        createCell(totalRow, 8, formatMinutesToHHMM(totalMinutes), styles.totalValueStyle());
+        createCell(totalRow, 9, "", styles.totalBorderStyle());
+        createCell(totalRow, 10, "", styles.totalBorderStyle());
+        createCell(totalRow, 11, "", styles.totalBorderStyle());
 
-        Row labelRow = sheet.createRow(rowIndex);
-        createCell(labelRow, 1, "Assinatura do Colaborador: " + userName, styles.normalStyle());
-        createCell(labelRow, 5, "Assinatura do Responsável", styles.normalStyle());
+        rowIndex += 2;
+
+        Row signatureLine = sheet.createRow(rowIndex++);
+        signatureLine.setHeightInPoints(14);
+        createCell(signatureLine, 1, "____________________________________________________", styles.signatureStyle());
+        sheet.addMergedRegion(new CellRangeAddress(signatureLine.getRowNum(), signatureLine.getRowNum(), 1, COLUMN_COUNT - 1));
+
+        Row signatureLabel = sheet.createRow(rowIndex++);
+        signatureLabel.setHeightInPoints(13);
+        createCell(signatureLabel, 1, "Ass. do Funcionário", styles.signatureStyle());
+        sheet.addMergedRegion(new CellRangeAddress(signatureLabel.getRowNum(), signatureLabel.getRowNum(), 1, COLUMN_COUNT - 1));
+
+        Row employeeLabel = sheet.createRow(rowIndex);
+        employeeLabel.setHeightInPoints(13);
+        createCell(employeeLabel, 1, userName, styles.signatureStyle());
+        sheet.addMergedRegion(new CellRangeAddress(employeeLabel.getRowNum(), employeeLabel.getRowNum(), 1, COLUMN_COUNT - 1));
+
+        rowIndex += 1;
+
+        Row noteRow = sheet.createRow(rowIndex);
+        createCell(noteRow, 0, "Baseado em horas e minutos, podendo haver diferença no relógio de ponto que considera horas, minutos e segundos.", styles.noteStyle());
+        sheet.addMergedRegion(new CellRangeAddress(noteRow.getRowNum(), noteRow.getRowNum(), 0, 10));
     }
 
     private void adjustColumnWidths(Sheet sheet) {
-        for (int i = 0; i < 9; i++) {
-            sheet.autoSizeColumn(i);
+        int[] widths = {
+                15, 17, 9, 11, 12, 11, 9, 12, 12, 12, 47, 21
+        };
+
+        for (int i = 0; i < widths.length; i++) {
+            sheet.setColumnWidth(i, widths[i] * 256);
         }
-        sheet.setColumnWidth(8, 256 * 25);
+        
+        sheet.getRow(4).setHeightInPoints(28);
     }
 
     private boolean isWorkingDay(DayOfWeek dayOfWeek, WorkPolicy policy) {
@@ -298,29 +461,70 @@ public class ReportService {
     }
 
     private ReportStyles createStyles(Workbook workbook) {
-        CellStyle titleStyle = workbook.createCellStyle();
         Font titleFont = workbook.createFont();
         titleFont.setBold(true);
+        titleFont.setColor(IndexedColors.WHITE.getIndex());
         titleFont.setFontHeightInPoints((short) 16);
-        titleStyle.setFont(titleFont);
-        titleStyle.setAlignment(HorizontalAlignment.CENTER);
 
-        CellStyle boldStyle = workbook.createCellStyle();
+        Font subtitleFont = workbook.createFont();
+        subtitleFont.setColor(IndexedColors.WHITE.getIndex());
+        subtitleFont.setFontHeightInPoints((short) 11);
+
+        Font boldWhiteFont = workbook.createFont();
+        boldWhiteFont.setBold(true);
+        boldWhiteFont.setColor(IndexedColors.WHITE.getIndex());
+
         Font boldFont = workbook.createFont();
         boldFont.setBold(true);
-        boldStyle.setFont(boldFont);
 
-        CellStyle normalStyle = workbook.createCellStyle();
+        CellStyle titleStyle = workbook.createCellStyle();
+        titleStyle.setFont(titleFont);
+        titleStyle.setAlignment(HorizontalAlignment.CENTER);
+        titleStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+        titleStyle.setFillForegroundColor(IndexedColors.ROYAL_BLUE.getIndex());
+        titleStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
+        CellStyle subtitleStyle = workbook.createCellStyle();
+        subtitleStyle.setFont(subtitleFont);
+        subtitleStyle.setAlignment(HorizontalAlignment.CENTER);
+        subtitleStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+        subtitleStyle.setFillForegroundColor(IndexedColors.ROYAL_BLUE.getIndex());
+        subtitleStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
+        CellStyle metaLabelStyle = workbook.createCellStyle();
+        metaLabelStyle.setFont(boldFont);
+        metaLabelStyle.setFillForegroundColor(IndexedColors.PALE_BLUE.getIndex());
+        metaLabelStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
+        CellStyle metaValueStyle = workbook.createCellStyle();
+        metaValueStyle.setFillForegroundColor(IndexedColors.WHITE.getIndex());
+        metaValueStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
 
         CellStyle headerStyle = workbook.createCellStyle();
-        headerStyle.setFont(boldFont);
-        headerStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+        headerStyle.setFont(boldWhiteFont);
+        headerStyle.setFillForegroundColor(IndexedColors.ROYAL_BLUE.getIndex());
         headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
         headerStyle.setBorderBottom(BorderStyle.THIN);
         headerStyle.setBorderTop(BorderStyle.THIN);
         headerStyle.setBorderLeft(BorderStyle.THIN);
         headerStyle.setBorderRight(BorderStyle.THIN);
         headerStyle.setAlignment(HorizontalAlignment.CENTER);
+        headerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+        headerStyle.setWrapText(true);
+
+        CellStyle dataStyleEven = workbook.createCellStyle();
+        dataStyleEven.setBorderBottom(BorderStyle.THIN);
+        dataStyleEven.setBorderTop(BorderStyle.THIN);
+        dataStyleEven.setBorderLeft(BorderStyle.THIN);
+        dataStyleEven.setBorderRight(BorderStyle.THIN);
+        dataStyleEven.setAlignment(HorizontalAlignment.CENTER);
+        dataStyleEven.setVerticalAlignment(VerticalAlignment.TOP);
+        dataStyleEven.setWrapText(true);
+
+        CellStyle dataStyleOdd = workbook.createCellStyle();
+        dataStyleOdd.cloneStyleFrom(dataStyleEven);
+        dataStyleOdd.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+        dataStyleOdd.setFillPattern(FillPatternType.SOLID_FOREGROUND);
 
         CellStyle dataStyle = workbook.createCellStyle();
         dataStyle.setBorderBottom(BorderStyle.THIN);
@@ -328,25 +532,102 @@ public class ReportService {
         dataStyle.setBorderLeft(BorderStyle.THIN);
         dataStyle.setBorderRight(BorderStyle.THIN);
         dataStyle.setAlignment(HorizontalAlignment.CENTER);
+        dataStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+        dataStyle.setWrapText(false);
+
+        CellStyle justificationStyle = workbook.createCellStyle();
+        justificationStyle.cloneStyleFrom(dataStyle);
+        justificationStyle.setAlignment(HorizontalAlignment.LEFT);
+        justificationStyle.setIndention((short) 2);
+        justificationStyle.setWrapText(true);
 
         CellStyle weekendStyle = workbook.createCellStyle();
-        weekendStyle.setFillForegroundColor(IndexedColors.LIGHT_CORNFLOWER_BLUE.getIndex());
+        weekendStyle.cloneStyleFrom(dataStyle);
+        weekendStyle.setFillForegroundColor(IndexedColors.PALE_BLUE.getIndex());
         weekendStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-        weekendStyle.setBorderBottom(BorderStyle.THIN);
-        weekendStyle.setBorderTop(BorderStyle.THIN);
-        weekendStyle.setBorderLeft(BorderStyle.THIN);
-        weekendStyle.setBorderRight(BorderStyle.THIN);
-        weekendStyle.setAlignment(HorizontalAlignment.CENTER);
 
-        return new ReportStyles(titleStyle, boldStyle, normalStyle, headerStyle, dataStyle, weekendStyle);
+        CellStyle weeklyTotalStyle = workbook.createCellStyle();
+        weeklyTotalStyle.cloneStyleFrom(dataStyle);
+        weeklyTotalStyle.setFont(boldWhiteFont);
+        weeklyTotalStyle.setFillForegroundColor(IndexedColors.ROYAL_BLUE.getIndex());
+        weeklyTotalStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        weeklyTotalStyle.setAlignment(HorizontalAlignment.CENTER);
+        weeklyTotalStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+
+        CellStyle totalBorderStyle = workbook.createCellStyle();
+        totalBorderStyle.setBorderBottom(BorderStyle.THIN);
+        totalBorderStyle.setBorderTop(BorderStyle.THIN);
+        totalBorderStyle.setBorderLeft(BorderStyle.THIN);
+        totalBorderStyle.setBorderRight(BorderStyle.THIN);
+        totalBorderStyle.setAlignment(HorizontalAlignment.CENTER);
+        totalBorderStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+        totalBorderStyle.setFillForegroundColor(IndexedColors.WHITE.getIndex());
+        totalBorderStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+
+        CellStyle totalLabelStyle = workbook.createCellStyle();
+        totalLabelStyle.cloneStyleFrom(headerStyle);
+        totalLabelStyle.setAlignment(HorizontalAlignment.CENTER);
+
+        CellStyle totalBandStyle = workbook.createCellStyle();
+        totalBandStyle.cloneStyleFrom(totalLabelStyle);
+
+        CellStyle totalValueStyle = workbook.createCellStyle();
+        totalValueStyle.cloneStyleFrom(weeklyTotalStyle);
+        totalValueStyle.setFillForegroundColor(IndexedColors.PALE_BLUE.getIndex());
+        totalValueStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        totalValueStyle.setFont(boldFont);
+        totalValueStyle.setAlignment(HorizontalAlignment.CENTER);
+
+        CellStyle signatureStyle = workbook.createCellStyle();
+        signatureStyle.setAlignment(HorizontalAlignment.CENTER);
+
+        Font noteFont = workbook.createFont();
+        noteFont.setFontHeightInPoints((short) 8);
+
+        CellStyle noteStyle = workbook.createCellStyle();
+        noteStyle.setFont(noteFont);
+        noteStyle.setAlignment(HorizontalAlignment.LEFT);
+
+        return new ReportStyles(
+                titleStyle,
+                subtitleStyle,
+                metaLabelStyle,
+                metaValueStyle,
+                headerStyle,
+                dataStyleEven,
+                dataStyleOdd,
+                dataStyle,
+                justificationStyle,
+                weekendStyle,
+                weeklyTotalStyle,
+                totalBandStyle,
+                totalBorderStyle,
+                totalLabelStyle,
+                totalValueStyle,
+                signatureStyle,
+                noteStyle
+        );
     }
 
     private record ReportStyles(
             CellStyle titleStyle,
-            CellStyle boldStyle,
-            CellStyle normalStyle,
+            CellStyle subtitleStyle,
+            CellStyle metaLabelStyle,
+            CellStyle metaValueStyle,
             CellStyle headerStyle,
+            CellStyle dataStyleEven,
+            CellStyle dataStyleOdd,
             CellStyle dataStyle,
-            CellStyle weekendStyle
+            CellStyle justificationStyle,
+            CellStyle weekendStyle,
+            CellStyle weeklyTotalStyle,
+            CellStyle totalBandStyle,
+            CellStyle totalBorderStyle,
+            CellStyle totalLabelStyle,
+            CellStyle totalValueStyle,
+            CellStyle signatureStyle,
+            CellStyle noteStyle
     ) {}
+
+    private record DailyRowResult(long workedMinutes, CellStyle baseStyle) {}
 }
