@@ -8,6 +8,7 @@ import com.ap101gamestudio.timetracker.repository.*;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
@@ -36,11 +37,11 @@ public class ReportService {
     private final WorkspaceRepository workspaceRepository;
     private final WorkspaceMembershipRepository membershipRepository;
     private final SpecialDateRepository specialDateRepository;
+    private final MessageSource messageSource;
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter MONTH_YEAR_FORMATTER = DateTimeFormatter.ofPattern("MM/yyyy");
-    private static final Locale PT_BR = Locale.forLanguageTag("pt-BR");
     private static final int COLUMN_COUNT = 12;
 
     public ReportService(
@@ -48,28 +49,31 @@ public class ReportService {
             UserRepository userRepository,
             WorkspaceRepository workspaceRepository,
             WorkspaceMembershipRepository membershipRepository,
-            SpecialDateRepository specialDateRepository
+            SpecialDateRepository specialDateRepository,
+            MessageSource messageSource
     ) {
         this.recordRepository = recordRepository;
         this.userRepository = userRepository;
         this.workspaceRepository = workspaceRepository;
         this.membershipRepository = membershipRepository;
         this.specialDateRepository = specialDateRepository;
+        this.messageSource = messageSource;
     }
 
-    public byte[] generateMonthlyTimesheet(String authenticatedEmail, UUID userId, UUID workspaceId, int year, int month) {
+    public byte[] generateMonthlyTimesheet(String authenticatedEmail, UUID userId, UUID workspaceId, int year, int month, String localeString) {
         validateManagerAccess(authenticatedEmail, workspaceId);
 
         User user = getUser(userId);
         Workspace workspace = getWorkspace(workspaceId);
         WorkspaceMembership membership = getMembership(userId, workspaceId);
         YearMonth yearMonth = YearMonth.of(year, month);
+        Locale locale = localeString != null ? Locale.forLanguageTag(localeString) : Locale.forLanguageTag("pt-BR");
 
         List<TimeRecord> validRecords = getValidRecords(userId, workspaceId, yearMonth);
         Map<LocalDate, List<TimeRecord>> recordsByDay = groupRecordsByDay(validRecords);
         List<SpecialDate> monthHolidays = getHolidays(workspaceId, yearMonth);
 
-        return buildExcelWorkbook(user, workspace, membership, yearMonth, recordsByDay, monthHolidays);
+        return buildExcelWorkbook(user, workspace, membership, yearMonth, recordsByDay, monthHolidays, locale);
     }
 
     private void validateManagerAccess(String email, UUID workspaceId) {
@@ -125,18 +129,18 @@ public class ReportService {
         return specialDateRepository.findRelevantDates(workspaceId, start, end);
     }
 
-    private byte[] buildExcelWorkbook(User user, Workspace workspace, WorkspaceMembership membership, YearMonth yearMonth, Map<LocalDate, List<TimeRecord>> recordsByDay, List<SpecialDate> monthHolidays) {
+    private byte[] buildExcelWorkbook(User user, Workspace workspace, WorkspaceMembership membership, YearMonth yearMonth, Map<LocalDate, List<TimeRecord>> recordsByDay, List<SpecialDate> monthHolidays, Locale locale) {
         try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Sheet sheet = workbook.createSheet(yearMonth.format(DateTimeFormatter.ofPattern("MM-yyyy")));
             ReportStyles styles = createStyles(workbook);
 
             configureSheetLayout(sheet);
-            createDocumentHeader(sheet, user, workspace, yearMonth, styles);
-            createTableHeader(sheet, styles);
+            createDocumentHeader(sheet, user, workspace, yearMonth, styles, locale);
+            createTableHeader(sheet, styles, locale);
 
-            long totalWorkedMinutesMonth = fillMonthRows(sheet, yearMonth, membership, recordsByDay, monthHolidays, styles);
+            long totalWorkedMinutesMonth = fillMonthRows(sheet, yearMonth, membership, recordsByDay, monthHolidays, styles, locale);
 
-            createDocumentFooter(sheet, sheet.getLastRowNum(), totalWorkedMinutesMonth, user.getFullName(), styles);
+            createDocumentFooter(sheet, sheet.getLastRowNum(), totalWorkedMinutesMonth, user.getFullName(), styles, locale);
             adjustColumnWidths(sheet);
 
             workbook.write(out);
@@ -163,7 +167,7 @@ public class ReportService {
         printSetup.setFitHeight((short) 1);
     }
 
-    private long fillMonthRows(Sheet sheet, YearMonth yearMonth, WorkspaceMembership membership, Map<LocalDate, List<TimeRecord>> recordsByDay, List<SpecialDate> monthHolidays, ReportStyles styles) {
+    private long fillMonthRows(Sheet sheet, YearMonth yearMonth, WorkspaceMembership membership, Map<LocalDate, List<TimeRecord>> recordsByDay, List<SpecialDate> monthHolidays, ReportStyles styles, Locale locale) {
         int rowIndex = 5;
         long totalWorkedMinutesMonth = 0;
         long weeklyWorkedMinutes = 0;
@@ -174,7 +178,7 @@ public class ReportService {
             Row row = sheet.createRow(rowIndex);
             row.setHeightInPoints(16);
 
-            DailyRowResult dailyResult = processDailyRow(row, currentDate, membership, recordsByDay, monthHolidays, styles);
+            DailyRowResult dailyResult = processDailyRow(row, currentDate, membership, recordsByDay, monthHolidays, styles, locale);
             totalWorkedMinutesMonth += dailyResult.workedMinutes();
             weeklyWorkedMinutes += dailyResult.workedMinutes();
 
@@ -211,8 +215,9 @@ public class ReportService {
         return totalWorkedMinutesMonth;
     }
 
-    private DailyRowResult processDailyRow(Row row, LocalDate currentDate, WorkspaceMembership membership, Map<LocalDate, List<TimeRecord>> recordsByDay, List<SpecialDate> monthHolidays, ReportStyles styles) {
-        String dayName = currentDate.getDayOfWeek().getDisplayName(TextStyle.FULL, PT_BR);
+    private DailyRowResult processDailyRow(Row row, LocalDate currentDate, WorkspaceMembership membership, Map<LocalDate, List<TimeRecord>> recordsByDay, List<SpecialDate> monthHolidays, ReportStyles styles, Locale locale) {
+        String dayName = currentDate.getDayOfWeek().getDisplayName(TextStyle.FULL, locale);
+        dayName = dayName.substring(0, 1).toUpperCase() + dayName.substring(1);
 
         Optional<SpecialDate> specialDate = findMatchingSpecialDate(monthHolidays, currentDate);
 
@@ -220,13 +225,15 @@ public class ReportService {
         CellStyle baseDataStyle = styles.dataStyle();
 
         if (specialDate.isPresent() && isFullDayHoliday(specialDate.get())) {
-            String holidayJustification = formatHolidayJustification(specialDate.get().getDescription());
-            fillExceptionRow(row, currentDate, dayName, "FERIADO", holidayJustification, styles.weekendStyle());
+            String holidayLabel = messageSource.getMessage("report.holiday", null, locale);
+            String holidayJustification = normalizeDescription(specialDate.get().getDescription());
+            fillExceptionRow(row, currentDate, dayName, holidayLabel, holidayJustification, styles.weekendStyle());
             return new DailyRowResult(0, styles.weekendStyle());
         }
 
         if (!isWorkingDay) {
-            fillExceptionRow(row, currentDate, dayName, "FINAL DE SEMANA", "FINAL DE SEMANA", styles.weekendStyle());
+            String weekendLabel = messageSource.getMessage("report.weekend", null, locale);
+            fillExceptionRow(row, currentDate, dayName, weekendLabel, weekendLabel, styles.weekendStyle());
             return new DailyRowResult(0, styles.weekendStyle());
         }
 
@@ -238,62 +245,54 @@ public class ReportService {
                 .map(this::normalizeDescription)
                 .orElse(null);
         
-        long workedMinutes = fillWorkingDayRow(row, currentDate, dayName, dailyRecords, baseDataStyle, styles, partialHolidayDesc);
+        long workedMinutes = fillWorkingDayRow(row, currentDate, dayName, dailyRecords, baseDataStyle, styles, partialHolidayDesc, locale);
         return new DailyRowResult(workedMinutes, baseDataStyle);
     }
 
-    private String formatHolidayJustification(String description) {
-        String normalized = normalizeDescription(description);
-        if (normalized.startsWith("FERIADO")) {
-            return normalized;
-        }
-        return "FERIADO: " + normalized;
-    }
-
-    private void createDocumentHeader(Sheet sheet, User user, Workspace workspace, YearMonth yearMonth, ReportStyles styles) {
+    private void createDocumentHeader(Sheet sheet, User user, Workspace workspace, YearMonth yearMonth, ReportStyles styles, Locale locale) {
         Row row0 = sheet.createRow(0);
         row0.setHeightInPoints(28);
         Cell titleCell = row0.createCell(0);
-        titleCell.setCellValue("FOLHA DE PONTO INDIVIDUAL");
+        titleCell.setCellValue(messageSource.getMessage("report.title", null, locale));
         titleCell.setCellStyle(styles.titleStyle());
         sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, COLUMN_COUNT - 1));
 
         Row row1 = sheet.createRow(1);
         row1.setHeightInPoints(20);
         Cell subtitleCell = row1.createCell(0);
-        subtitleCell.setCellValue("Consolidado mensal de registros de jornada");
+        subtitleCell.setCellValue(messageSource.getMessage("report.subtitle", null, locale));
         subtitleCell.setCellStyle(styles.subtitleStyle());
         sheet.addMergedRegion(new CellRangeAddress(1, 1, 0, COLUMN_COUNT - 1));
 
         Row row2 = sheet.createRow(2);
-        createCell(row2, 0, "Colaborador", styles.metaLabelStyle());
+        createCell(row2, 0, messageSource.getMessage("report.employee", null, locale), styles.metaLabelStyle());
         createCell(row2, 1, user.getFullName(), styles.metaValueStyle());
-        createCell(row2, 6, "Mês/Ano", styles.metaLabelStyle());
+        createCell(row2, 6, messageSource.getMessage("report.month_year", null, locale), styles.metaLabelStyle());
         createCell(row2, 7, yearMonth.format(MONTH_YEAR_FORMATTER), styles.metaValueStyle());
 
         Row row3 = sheet.createRow(3);
-        createCell(row3, 0, "Empresa", styles.metaLabelStyle());
+        createCell(row3, 0, messageSource.getMessage("report.company", null, locale), styles.metaLabelStyle());
         createCell(row3, 1, workspace.getName(), styles.metaValueStyle());
-        createCell(row3, 6, "Gerado em", styles.metaLabelStyle());
+        createCell(row3, 6, messageSource.getMessage("report.generated_at", null, locale), styles.metaLabelStyle());
         createCell(row3, 7, LocalDate.now().format(DATE_FORMATTER), styles.metaValueStyle());
     }
 
-    private void createTableHeader(Sheet sheet, ReportStyles styles) {
+    private void createTableHeader(Sheet sheet, ReportStyles styles, Locale locale) {
         Row header = sheet.createRow(4);
         header.setHeightInPoints(24);
         String[] columns = {
-                "Data",
-                "Dia da semana",
-                "Hora Entrada",
-                "Hora Saída Almoço",
-                "Hora Entrada Almoço",
-                "Duração Intervalo",
-                "Hora Saída",
-                "Total sem intervalo",
-                "Horas trabalhadas",
-                "Horas semanais",
-                "Justificativa",
-                "Observação"
+                messageSource.getMessage("report.header.date", null, locale),
+                messageSource.getMessage("report.header.weekday", null, locale),
+                messageSource.getMessage("report.header.entry", null, locale),
+                messageSource.getMessage("report.header.lunch_start", null, locale),
+                messageSource.getMessage("report.header.lunch_end", null, locale),
+                messageSource.getMessage("report.header.interval", null, locale),
+                messageSource.getMessage("report.header.exit", null, locale),
+                messageSource.getMessage("report.header.total_without_interval", null, locale),
+                messageSource.getMessage("report.header.worked_hours", null, locale),
+                messageSource.getMessage("report.header.weekly_hours", null, locale),
+                messageSource.getMessage("report.header.justification", null, locale),
+                messageSource.getMessage("report.header.observation", null, locale)
         };
 
         for (int i = 0; i < columns.length; i++) {
@@ -313,7 +312,7 @@ public class ReportService {
         createCell(row, 11, observation, style);
     }
 
-    private long fillWorkingDayRow(Row row, LocalDate date, String dayName, List<TimeRecord> records, CellStyle style, ReportStyles styles, String partialHolidayDesc) {
+    private long fillWorkingDayRow(Row row, LocalDate date, String dayName, List<TimeRecord> records, CellStyle style, ReportStyles styles, String partialHolidayDesc, Locale locale) {
         createCell(row, 0, date.format(DATE_FORMATTER), style);
         createCell(row, 1, dayName, style);
 
@@ -351,11 +350,13 @@ public class ReportService {
         createCell(row, 8, workedMinutes > 0 ? formatMinutesToHHMM(workedMinutes) : "", style);
 
         String justification;
-        String observation = records.isEmpty() ? "FALTA" : "";
+        String absenceStr = messageSource.getMessage("report.absence", null, locale);
+        String partialStr = messageSource.getMessage("report.partial_holiday", null, locale);
+        String observation = records.isEmpty() ? absenceStr : "";
 
         if (partialHolidayDesc != null) {
             justification = partialHolidayDesc;
-            observation = observation.isEmpty() ? "MEIO EXPEDIENTE" : observation + " - MEIO EXPEDIENTE";
+            observation = observation.isEmpty() ? partialStr : observation + " - " + partialStr;
         } else {
             justification = records.stream()
                     .map(TimeRecord::getJustification)
@@ -388,18 +389,18 @@ public class ReportService {
         return description == null ? "" : description.trim().toUpperCase();
     }
 
-    private void createDocumentFooter(Sheet sheet, int lastRowIndex, long totalMinutes, String userName, ReportStyles styles) {
+    private void createDocumentFooter(Sheet sheet, int lastRowIndex, long totalMinutes, String userName, ReportStyles styles, Locale locale) {
         int rowIndex = lastRowIndex + 1;
 
         Row totalRow = sheet.createRow(rowIndex++);
-        totalRow.setHeightInPoints(20);
+        totalRow.setHeightInPoints(28);
 
         for (int i = 0; i < 7; i++) {
             createCell(totalRow, i, "", styles.totalBandStyle());
         }
         sheet.addMergedRegion(new CellRangeAddress(rowIndex - 1, rowIndex - 1, 0, 6));
 
-        createCell(totalRow, 7, "TOTAL MÊS", styles.totalLabelStyle());
+        createCell(totalRow, 7, messageSource.getMessage("report.monthly_total", null, locale), styles.totalLabelStyle());
         createCell(totalRow, 8, formatMinutesToHHMM(totalMinutes), styles.totalValueStyle());
         createCell(totalRow, 9, "", styles.totalBorderStyle());
         createCell(totalRow, 10, "", styles.totalBorderStyle());
@@ -414,7 +415,7 @@ public class ReportService {
 
         Row signatureLabel = sheet.createRow(rowIndex++);
         signatureLabel.setHeightInPoints(13);
-        createCell(signatureLabel, 1, "Ass. do Funcionário", styles.signatureStyle());
+        createCell(signatureLabel, 1, messageSource.getMessage("report.employee_signature", null, locale), styles.signatureStyle());
         sheet.addMergedRegion(new CellRangeAddress(signatureLabel.getRowNum(), signatureLabel.getRowNum(), 1, COLUMN_COUNT - 1));
 
         Row employeeLabel = sheet.createRow(rowIndex);
@@ -425,13 +426,13 @@ public class ReportService {
         rowIndex += 1;
 
         Row noteRow = sheet.createRow(rowIndex);
-        createCell(noteRow, 0, "Baseado em horas e minutos, podendo haver diferença no relógio de ponto que considera horas, minutos e segundos.", styles.noteStyle());
+        createCell(noteRow, 0, messageSource.getMessage("report.note", null, locale), styles.noteStyle());
         sheet.addMergedRegion(new CellRangeAddress(noteRow.getRowNum(), noteRow.getRowNum(), 0, 10));
     }
 
     private void adjustColumnWidths(Sheet sheet) {
         int[] widths = {
-                15, 17, 9, 11, 12, 11, 9, 12, 12, 12, 47, 21
+                15, 17, 9, 11, 12, 11, 15, 12, 12, 12, 47, 21
         };
 
         for (int i = 0; i < widths.length; i++) {

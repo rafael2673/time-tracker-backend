@@ -23,11 +23,12 @@ public class ReportController {
     public ResponseEntity<byte[]> downloadTimesheet(
             Authentication authentication,
             @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @RequestHeader(value = "Accept-Language", defaultValue = "pt-BR") String locale,
             @RequestParam UUID userId,
             @RequestParam int year,
             @RequestParam int month
     ) {
-        byte[] report = reportService.generateMonthlyTimesheet(authentication.getName(), userId, workspaceId, year, month);
+        byte[] report = reportService.generateMonthlyTimesheet(authentication.getName(), userId, workspaceId, year, month, locale);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
