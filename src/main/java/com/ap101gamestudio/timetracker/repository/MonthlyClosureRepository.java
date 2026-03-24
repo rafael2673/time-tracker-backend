@@ -13,4 +13,5 @@ public interface MonthlyClosureRepository extends JpaRepository<MonthlyClosure, 
     Optional<MonthlyClosure> findByWorkspaceIdAndUserIdAndReferenceYearAndReferenceMonth(UUID workspaceId, UUID userId, int year, int month);
     boolean existsByWorkspaceIdAndReferenceYearAndReferenceMonth(UUID workspaceId, int year, int month);
     List<MonthlyClosure> findByWorkspaceIdAndReferenceYearAndReferenceMonth(UUID workspaceId, int year, int month);
+    List<MonthlyClosure> findAllByWorkspaceIdAndUserIdAndReferenceYear(UUID workspaceId, UUID userId, int year);
 }

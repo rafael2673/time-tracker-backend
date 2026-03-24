@@ -131,7 +131,7 @@ class TimeTrackingServiceTest {
         MonthlyBalanceResponse response = timeTrackingService.getMonthlyBalance(email, today.getYear(), today.getMonthValue(), workspaceId);
 
         Assertions.assertEquals(10.0, response.workedHours());
-        Assertions.assertEquals(10.0 - response.expectedHours(), response.balance());
+        Assertions.assertEquals(10.0 - response.expectedHours() - response.dsrDiscountHours(), response.balance());
     }
 
     @Test
@@ -231,6 +231,6 @@ class TimeTrackingServiceTest {
 
         Assertions.assertEquals(0.0, response.workedHours());
         Assertions.assertEquals(156.0, response.expectedHours());
-        Assertions.assertEquals(-156.0, response.balance());
+        Assertions.assertEquals(-156.0 - response.dsrDiscountHours(), response.balance());
     }
 }

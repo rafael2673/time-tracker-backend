@@ -103,7 +103,7 @@ class TimesheetClosureServiceTest {
 
         Mockito.when(membershipRepository.findByWorkspaceId(workspace.getId())).thenReturn(List.of(employeeMembership));
 
-        MonthlyBalanceResponse balance = new MonthlyBalanceResponse(175.0, 160.0, 15.0);
+        MonthlyBalanceResponse balance = new MonthlyBalanceResponse(175.0, 160.0, 15.0, 0, 0.0);
         Mockito.when(timeTrackingService.getMonthlyBalance(employee.getEmail(), 2026, 3, workspace.getId())).thenReturn(balance);
         Mockito.when(closureRepository.findByWorkspaceIdAndUserIdAndReferenceYearAndReferenceMonth(any(), any(), anyInt(), anyInt())).thenReturn(Optional.empty());
         Mockito.when(closureRepository.save(any(MonthlyClosure.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -136,7 +136,7 @@ class TimesheetClosureServiceTest {
 
         Mockito.when(membershipRepository.findByWorkspaceId(workspace.getId())).thenReturn(List.of(employeeMembership));
 
-        MonthlyBalanceResponse balance = new MonthlyBalanceResponse(165.0, 160.0, 5.0);
+        MonthlyBalanceResponse balance = new MonthlyBalanceResponse(165.0, 160.0, 5.0, 0, 0.0);
         Mockito.when(timeTrackingService.getMonthlyBalance(employee.getEmail(), 2026, 3, workspace.getId())).thenReturn(balance);
 
         MonthlyClosure previousClosure = new MonthlyClosure(workspace, employee, 2026, 2, 160.0, 160.0, 0.0, 0.0, 0.0, 20.0);
@@ -172,7 +172,7 @@ class TimesheetClosureServiceTest {
 
         Mockito.when(membershipRepository.findByWorkspaceId(workspace.getId())).thenReturn(List.of(employeeMembership));
 
-        MonthlyBalanceResponse balance = new MonthlyBalanceResponse(168.0, 160.0, 8.0);
+        MonthlyBalanceResponse balance = new MonthlyBalanceResponse(168.0, 160.0, 8.0, 0, 0.0);
         Mockito.when(timeTrackingService.getMonthlyBalance(employee.getEmail(), 2026, 3, workspace.getId())).thenReturn(balance);
         Mockito.when(closureRepository.findByWorkspaceIdAndUserIdAndReferenceYearAndReferenceMonth(any(), any(), anyInt(), anyInt())).thenReturn(Optional.empty());
         Mockito.when(closureRepository.save(any(MonthlyClosure.class))).thenAnswer(invocation -> invocation.getArgument(0));

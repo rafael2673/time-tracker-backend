@@ -52,6 +52,12 @@ public class MonthlyClosure {
     @Column(name = "closed_at", nullable = false)
     private LocalDateTime closedAt;
 
+    @Column(name = "unjustified_absences", nullable = false)
+    private int unjustifiedAbsences = 0;
+
+    @Column(name = "dsr_discount_hours", nullable = false)
+    private double dsrDiscountHours = 0.0;
+
     protected MonthlyClosure() {}
 
     public MonthlyClosure(
