@@ -1,5 +1,6 @@
 package com.ap101gamestudio.timetracker.controller;
 
+import com.ap101gamestudio.timetracker.annotation.CurrentWorkspaceId;
 import com.ap101gamestudio.timetracker.dto.WorkPolicyRequest;
 import com.ap101gamestudio.timetracker.model.WorkPolicy;
 import com.ap101gamestudio.timetracker.service.WorkPolicyService;
@@ -25,7 +26,7 @@ public class WorkPolicyController {
     @GetMapping
     public ResponseEntity<List<WorkPolicy>> listAll(
             Authentication authentication,
-            @RequestHeader("X-Workspace-Id") UUID workspaceId
+            @CurrentWorkspaceId UUID workspaceId
     ) {
         return ResponseEntity.ok(service.listPolicies(authentication.getName(), workspaceId));
     }
@@ -33,7 +34,7 @@ public class WorkPolicyController {
     @PostMapping
     public ResponseEntity<WorkPolicy> create(
             Authentication authentication,
-            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @CurrentWorkspaceId UUID workspaceId,
             @RequestBody @Valid WorkPolicyRequest request
     ) {
         WorkPolicy saved = service.createPolicy(authentication.getName(), workspaceId, request);
@@ -43,7 +44,7 @@ public class WorkPolicyController {
     @PutMapping("/{id}")
     public ResponseEntity<WorkPolicy> update(
             Authentication authentication,
-            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @CurrentWorkspaceId UUID workspaceId,
             @PathVariable UUID id,
             @RequestBody @Valid WorkPolicyRequest request
     ) {
@@ -53,7 +54,7 @@ public class WorkPolicyController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(
             Authentication authentication,
-            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @CurrentWorkspaceId UUID workspaceId,
             @PathVariable UUID id
     ) {
         service.deletePolicy(authentication.getName(), workspaceId, id);

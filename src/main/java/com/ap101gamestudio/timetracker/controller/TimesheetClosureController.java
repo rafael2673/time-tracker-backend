@@ -1,5 +1,6 @@
 package com.ap101gamestudio.timetracker.controller;
 
+import com.ap101gamestudio.timetracker.annotation.CurrentWorkspaceId;
 import com.ap101gamestudio.timetracker.dto.MonthlyClosureResponse;
 import com.ap101gamestudio.timetracker.service.TimesheetClosureService;
 import org.springframework.http.ResponseEntity;
@@ -21,7 +22,7 @@ public class TimesheetClosureController {
 
     @PostMapping("/{year}/{month}")
     public ResponseEntity<List<MonthlyClosureResponse>> closeMonth(
-            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @CurrentWorkspaceId UUID workspaceId,
             @PathVariable int year,
             @PathVariable int month,
             Authentication authentication
@@ -31,7 +32,7 @@ public class TimesheetClosureController {
 
     @GetMapping("/{year}/{month}")
     public ResponseEntity<List<MonthlyClosureResponse>> getClosures(
-            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @CurrentWorkspaceId UUID workspaceId,
             @PathVariable int year,
             @PathVariable int month,
             Authentication authentication

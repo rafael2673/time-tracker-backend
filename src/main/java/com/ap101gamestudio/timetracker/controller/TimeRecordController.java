@@ -1,5 +1,6 @@
 package com.ap101gamestudio.timetracker.controller;
 
+import com.ap101gamestudio.timetracker.annotation.CurrentWorkspaceId;
 import com.ap101gamestudio.timetracker.dto.*;
 import com.ap101gamestudio.timetracker.security.JwtService;
 import com.ap101gamestudio.timetracker.service.TimeTrackingService;
@@ -32,7 +33,7 @@ public class TimeRecordController {
     ) {
         String email = authentication.getName();
         String token = authHeader.substring(7);
-        UUID workspaceId = UUID.fromString(jwtService.extractWorkspaceId(token));
+        UUID workspaceId = jwtService.extractWorkspaceId(token);
 
         TimeRecordResponse response = timeTrackingService.registerPoint(email, request, workspaceId);
         return ResponseEntity.ok(response);
@@ -47,7 +48,7 @@ public class TimeRecordController {
     ) {
         String email = authentication.getName();
         String token = authHeader.substring(7);
-        UUID workspaceId = UUID.fromString(jwtService.extractWorkspaceId(token));
+        UUID workspaceId = jwtService.extractWorkspaceId(token);
 
         TimeRecordResponse response = timeTrackingService.updateRecord(id, email, request, workspaceId);
         return ResponseEntity.ok(response);
@@ -61,7 +62,7 @@ public class TimeRecordController {
     ) {
         String email = authentication.getName();
         String token = authHeader.substring(7);
-        UUID workspaceId = UUID.fromString(jwtService.extractWorkspaceId(token));
+        UUID workspaceId = jwtService.extractWorkspaceId(token);
         LocalDate targetDate = (date != null) ? date : LocalDate.now();
 
         List<TimeRecordResponse> response = timeTrackingService.getRecordsByDate(email, targetDate, workspaceId);
@@ -72,7 +73,7 @@ public class TimeRecordController {
     public ResponseEntity<List<TimeRecordResponse>> getDailyRecords(
             @RequestParam UUID userId,
             @RequestParam LocalDate date,
-            @RequestHeader("X-Workspace-Id") UUID workspaceId
+            @CurrentWorkspaceId UUID workspaceId
     ) {
         List<TimeRecordResponse> response = timeTrackingService.getRecordsByUserIdAndDate(userId, date, workspaceId);
         return ResponseEntity.ok(response);
@@ -80,7 +81,7 @@ public class TimeRecordController {
 
     @GetMapping("/pending")
     public ResponseEntity<com.ap101gamestudio.timetracker.dto.PageResponse<com.ap101gamestudio.timetracker.dto.PendingRecordResponse>> getPendingRecords(
-            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @CurrentWorkspaceId UUID workspaceId,
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
@@ -91,7 +92,7 @@ public class TimeRecordController {
 
     @PatchMapping("/{id}/approve")
     public ResponseEntity<Void> approveRecord(
-            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @CurrentWorkspaceId UUID workspaceId,
             @PathVariable UUID id,
             Authentication authentication
     ) {
@@ -101,7 +102,7 @@ public class TimeRecordController {
 
     @DeleteMapping("/{id}/reject")
     public ResponseEntity<Void> rejectRecord(
-            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @CurrentWorkspaceId UUID workspaceId,
             @PathVariable UUID id,
             Authentication authentication
     ) {
@@ -111,7 +112,7 @@ public class TimeRecordController {
 
     @GetMapping("/history")
     public ResponseEntity<PageResponse<PendingRecordResponse>> getApprovalHistory(
-            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @CurrentWorkspaceId UUID workspaceId,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String date,
             @RequestParam(defaultValue = "0") int page,

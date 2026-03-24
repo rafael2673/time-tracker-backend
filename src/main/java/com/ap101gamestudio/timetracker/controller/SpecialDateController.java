@@ -1,5 +1,6 @@
 package com.ap101gamestudio.timetracker.controller;
 
+import com.ap101gamestudio.timetracker.annotation.CurrentWorkspaceId;
 import com.ap101gamestudio.timetracker.dto.PageResponse;
 import com.ap101gamestudio.timetracker.dto.SpecialDateRequest;
 import com.ap101gamestudio.timetracker.dto.SpecialDateResponse;
@@ -23,7 +24,7 @@ public class SpecialDateController {
 
     @PostMapping
     public ResponseEntity<SpecialDateResponse> create(
-            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @CurrentWorkspaceId UUID workspaceId,
             @RequestBody @Valid SpecialDateRequest request,
             Authentication authentication
     ) {
@@ -32,7 +33,7 @@ public class SpecialDateController {
 
     @PutMapping("/{id}")
     public ResponseEntity<SpecialDateResponse> update(
-            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @CurrentWorkspaceId UUID workspaceId,
             @PathVariable UUID id,
             @RequestBody @Valid SpecialDateRequest request,
             Authentication authentication
@@ -42,7 +43,7 @@ public class SpecialDateController {
 
     @GetMapping
     public ResponseEntity<PageResponse<SpecialDateResponse>> getByYear(
-            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @CurrentWorkspaceId UUID workspaceId,
             @RequestParam int year,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String exactDate,
@@ -54,7 +55,7 @@ public class SpecialDateController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(
-            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @CurrentWorkspaceId UUID workspaceId,
             @PathVariable UUID id,
             Authentication authentication
     ) {
@@ -64,7 +65,7 @@ public class SpecialDateController {
 
     @PostMapping("/import-national")
     public ResponseEntity<Void> importNationalHolidays(
-            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @CurrentWorkspaceId UUID workspaceId,
             @RequestParam int year,
             Authentication authentication
     ) {

@@ -1,5 +1,6 @@
 package com.ap101gamestudio.timetracker.controller;
 
+import com.ap101gamestudio.timetracker.annotation.CurrentWorkspaceId;
 import com.ap101gamestudio.timetracker.dto.DailySummaryResponse;
 import com.ap101gamestudio.timetracker.dto.EmployeeDashboardSummary;
 import com.ap101gamestudio.timetracker.dto.MonthSummaryResponse;
@@ -33,7 +34,7 @@ public class SummaryController {
     public ResponseEntity<List<DailySummaryResponse>> getWeeklySummary(
             @RequestParam String date,
             @RequestHeader("Accept-Language") String locale,
-            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @CurrentWorkspaceId UUID workspaceId,
             Authentication authentication
     ) {
         LocalDate referenceDate = LocalDate.parse(date);
@@ -43,7 +44,7 @@ public class SummaryController {
 
     @GetMapping("/years")
     public ResponseEntity<List<Integer>> getAvailableYears(
-            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @CurrentWorkspaceId UUID workspaceId,
             Authentication authentication
     ) {
         return ResponseEntity.ok(timeTrackingService.getAvailableYears(authentication.getName(), workspaceId));
@@ -53,7 +54,7 @@ public class SummaryController {
     public ResponseEntity<List<MonthSummaryResponse>> getYearlySummary(
             @RequestParam int year,
             @RequestHeader("Accept-Language") String locale,
-            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @CurrentWorkspaceId UUID workspaceId,
             Authentication authentication
     ) {
         return ResponseEntity.ok(timeTrackingService.getYearlySummary(authentication.getName(), year, workspaceId, locale));
@@ -63,7 +64,7 @@ public class SummaryController {
     public ResponseEntity<MonthlyBalanceResponse> getMonthlyBalance(
             @RequestParam int year,
             @RequestParam int month,
-            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @CurrentWorkspaceId UUID workspaceId,
             Authentication authentication
     ) {
         return ResponseEntity.ok(timeTrackingService.getMonthlyBalance(authentication.getName(), year, month, workspaceId));
@@ -71,7 +72,7 @@ public class SummaryController {
 
     @GetMapping("/employee/{employeeId}")
     public ResponseEntity<EmployeeDashboardSummary> getEmployeeSummary(
-            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @CurrentWorkspaceId UUID workspaceId,
             @PathVariable UUID employeeId,
             Authentication authentication
     ) {
@@ -82,7 +83,7 @@ public class SummaryController {
     public ResponseEntity<MonthlyBalanceResponse> getQuarterlyBalance(
             @RequestParam int year,
             @RequestParam int quarter,
-            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @CurrentWorkspaceId UUID workspaceId,
             Authentication authentication
     ) {
         return ResponseEntity.ok(timeTrackingService.getQuarterlyBalance(authentication.getName(), year, quarter, workspaceId));

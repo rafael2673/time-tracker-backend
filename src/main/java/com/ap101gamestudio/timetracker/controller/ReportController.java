@@ -1,5 +1,6 @@
 package com.ap101gamestudio.timetracker.controller;
 
+import com.ap101gamestudio.timetracker.annotation.CurrentWorkspaceId;
 import com.ap101gamestudio.timetracker.service.ReportService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -22,7 +23,7 @@ public class ReportController {
     @GetMapping("/timesheet")
     public ResponseEntity<byte[]> downloadTimesheet(
             Authentication authentication,
-            @RequestHeader("X-Workspace-Id") UUID workspaceId,
+            @CurrentWorkspaceId UUID workspaceId,
             @RequestHeader(value = "Accept-Language", defaultValue = "pt-BR") String locale,
             @RequestParam UUID userId,
             @RequestParam int year,

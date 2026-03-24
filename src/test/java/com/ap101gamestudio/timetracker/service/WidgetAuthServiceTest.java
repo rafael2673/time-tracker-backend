@@ -1,6 +1,7 @@
 package com.ap101gamestudio.timetracker.service;
 
 import com.ap101gamestudio.timetracker.dto.WidgetLoginRequest;
+import com.ap101gamestudio.timetracker.dto.WidgetLoginResponse;
 import com.ap101gamestudio.timetracker.exceptions.DomainException;
 import com.ap101gamestudio.timetracker.model.ApiKey;
 import com.ap101gamestudio.timetracker.model.User;
@@ -91,9 +92,9 @@ class WidgetAuthServiceTest {
         Mockito.when(workPolicyRepository.findByWorkspaceId(workspace.getId())).thenReturn(List.of(defaultPolicy));
         Mockito.when(jwtService.generateToken(anyMap(), any(User.class))).thenReturn("valid_jwt_token");
 
-        String token = widgetAuthService.authenticateFromWidget(request);
+       WidgetLoginResponse loginResponse = widgetAuthService.authenticateFromWidget(request);
 
-        Assertions.assertEquals("valid_jwt_token", token);
+        Assertions.assertEquals("valid_jwt_token", loginResponse.token());
         Mockito.verify(membershipRepository, Mockito.times(1)).save(any());
     }
 }

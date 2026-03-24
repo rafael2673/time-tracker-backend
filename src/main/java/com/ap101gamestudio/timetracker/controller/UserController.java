@@ -1,5 +1,6 @@
 package com.ap101gamestudio.timetracker.controller;
 
+import com.ap101gamestudio.timetracker.annotation.CurrentWorkspaceId;
 import com.ap101gamestudio.timetracker.dto.GenerateLinkCodeResponse;
 import com.ap101gamestudio.timetracker.dto.SetPasswordRequest;
 import com.ap101gamestudio.timetracker.dto.UpdateProfileRequest;
@@ -43,7 +44,7 @@ public class UserController {
     public ResponseEntity<GenerateLinkCodeResponse> generateAccessCodeForEmployee(
             Authentication authentication,
             @PathVariable UUID employeeId,
-            @RequestHeader("X-Workspace-Id") UUID workspaceId
+            @CurrentWorkspaceId UUID workspaceId
     ) {
         return ResponseEntity.ok(userService.generateCodeForEmployee(authentication.getName(), employeeId, workspaceId));
     }

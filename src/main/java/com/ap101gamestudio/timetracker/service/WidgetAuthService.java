@@ -1,6 +1,7 @@
 package com.ap101gamestudio.timetracker.service;
 
 import com.ap101gamestudio.timetracker.dto.WidgetLoginRequest;
+import com.ap101gamestudio.timetracker.dto.WidgetLoginResponse;
 import com.ap101gamestudio.timetracker.exceptions.DomainException;
 import com.ap101gamestudio.timetracker.model.User;
 import com.ap101gamestudio.timetracker.model.WorkPolicy;
@@ -34,7 +35,7 @@ public class WidgetAuthService {
     private final PasswordEncoder passwordEncoder;
 
     @Transactional
-    public String authenticateFromWidget(WidgetLoginRequest request) {
+    public WidgetLoginResponse authenticateFromWidget(WidgetLoginRequest request) {
         var apiKey = apiKeyRepository.findByKeyAndActiveTrue(request.apiKey())
                 .orElseThrow(() -> new BadCredentialsException("error.api_key.invalid"));
 
@@ -48,7 +49,6 @@ public class WidgetAuthService {
                 .orElseGet(() -> createSilentUser(request));
 
         if (membershipRepository.findByUserIdAndWorkspaceId(user.getId(), workspace.getId()).isEmpty()) {
-
             WorkPolicy defaultPolicy = workPolicyRepository.findByWorkspaceId(workspace.getId())
                     .stream()
                     .findFirst()
@@ -60,14 +60,16 @@ public class WidgetAuthService {
         Map<String, Object> extraClaims = new HashMap<>();
         extraClaims.put("workspaceId", workspace.getId().toString());
 
-        return jwtService.generateToken(extraClaims, user);
+        String token = jwtService.generateToken(extraClaims, user);
+
+        return new WidgetLoginResponse(token, user.isHasWebPassword());
     }
 
     private User createSilentUser(WidgetLoginRequest request) {
         String email = request.email();
-        String fullName = (request.name() != null && !request.name().isBlank()) 
-            ? request.name() 
-            : email.split("@")[0];
+        String fullName = (request.name() != null && !request.name().isBlank())
+                ? request.name()
+                : email.split("@")[0];
         String hashedPassword = passwordEncoder.encode(UUID.randomUUID().toString());
 
         User newUser = new User(email, hashedPassword, fullName);

@@ -12,6 +12,7 @@ import javax.crypto.SecretKey;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Function;
 
 @Service
@@ -27,8 +28,9 @@ public class JwtService {
         return extractClaim(token, Claims::getSubject);
     }
 
-    public String extractWorkspaceId(String token) {
-        return extractClaim(token, claims -> claims.get("workspaceId", String.class));
+    public UUID extractWorkspaceId(String token) {
+        String workspaceIdStr = extractClaim(token, claims -> claims.get("workspaceId", String.class));
+        return workspaceIdStr != null ? UUID.fromString(workspaceIdStr) : null;
     }
 
     public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
