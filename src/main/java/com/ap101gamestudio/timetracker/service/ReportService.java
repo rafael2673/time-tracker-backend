@@ -430,7 +430,7 @@ public class ReportService {
 
     private void adjustColumnWidths(Sheet sheet) {
         int[] widths = {
-                15, 17, 9, 11, 12, 11, 15, 12, 12, 12, 47, 21
+                15, 17, 9, 11, 12, 11, 15, 12, 12, 12, 47, 47
         };
 
         for (int i = 0; i < widths.length; i++) {
