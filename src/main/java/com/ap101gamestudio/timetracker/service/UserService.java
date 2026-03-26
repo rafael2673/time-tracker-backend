@@ -2,9 +2,11 @@ package com.ap101gamestudio.timetracker.service;
 
 import com.ap101gamestudio.timetracker.dto.GenerateLinkCodeResponse;
 import com.ap101gamestudio.timetracker.dto.UpdateProfileRequest;
+import com.ap101gamestudio.timetracker.dto.UserProfileResponse;
 import com.ap101gamestudio.timetracker.exceptions.DomainException;
 import com.ap101gamestudio.timetracker.model.LinkCode;
 import com.ap101gamestudio.timetracker.model.User;
+import com.ap101gamestudio.timetracker.model.WorkspaceMembership;
 import com.ap101gamestudio.timetracker.repository.LinkCodeRepository;
 import com.ap101gamestudio.timetracker.repository.UserRepository;
 import com.ap101gamestudio.timetracker.repository.WorkspaceMembershipRepository;
@@ -14,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -93,6 +96,39 @@ public class UserService {
         linkCodeRepository.save(linkCode);
 
         return new GenerateLinkCodeResponse(code, 86400);
+    }
+
+    public UserProfileResponse getCurrentUserProfile(String email, UUID currentWorkspaceId) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new DomainException("error.user.not_found"));
+
+        List<WorkspaceMembership> memberships = membershipRepository.findByUserId(user.getId());
+
+        if (memberships.isEmpty()) {
+            return new UserProfileResponse(user.getId(), user.getFullName(), user.getEmail(), null, null, null);
+        }
+
+        WorkspaceMembership activeMembership = determineActiveMembership(memberships, currentWorkspaceId);
+
+        return new UserProfileResponse(
+                user.getId(),
+                user.getFullName(),
+                user.getEmail(),
+                activeMembership.getRole().name(),
+                activeMembership.getWorkspace().getId(),
+                activeMembership.getWorkspace().getName()
+        );
+    }
+
+    private WorkspaceMembership determineActiveMembership(List<WorkspaceMembership> memberships, UUID currentWorkspaceId) {
+        if (currentWorkspaceId == null) {
+            return memberships.getFirst();
+        }
+
+        return memberships.stream()
+                .filter(m -> m.getWorkspace().getId().equals(currentWorkspaceId))
+                .findFirst()
+                .orElse(memberships.getFirst());
     }
 
     private static class employeeNotInWorkspaceException extends DomainException {

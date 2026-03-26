@@ -4,6 +4,7 @@ import com.ap101gamestudio.timetracker.annotation.CurrentWorkspaceId;
 import com.ap101gamestudio.timetracker.dto.GenerateLinkCodeResponse;
 import com.ap101gamestudio.timetracker.dto.SetPasswordRequest;
 import com.ap101gamestudio.timetracker.dto.UpdateProfileRequest;
+import com.ap101gamestudio.timetracker.dto.UserProfileResponse;
 import com.ap101gamestudio.timetracker.service.UserService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -20,6 +21,14 @@ public class UserController {
 
     public UserController(UserService userService) {
         this.userService = userService;
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<UserProfileResponse> getCurrentUser(
+            Authentication authentication,
+            @CurrentWorkspaceId UUID workspaceId
+    ) {
+        return ResponseEntity.ok(userService.getCurrentUserProfile(authentication.getName(), workspaceId));
     }
 
     @PutMapping("/profile")
