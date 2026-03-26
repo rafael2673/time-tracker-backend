@@ -61,4 +61,13 @@ public class WorkspaceController {
         workspaceService.changeMemberStatus(authentication.getName(), workspaceId, employeeId, active);
         return ResponseEntity.noContent().build();
     }
+
+    @PutMapping("/{workspaceId}/auto-closure")
+    public ResponseEntity<WorkspaceResponse> updateAutoClosureSettings(
+            @PathVariable UUID workspaceId,
+            @RequestBody UpdateAutoClosureRequest request,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(workspaceService.updateAutoClosureSettings(workspaceId, request, authentication.getName()));
+    }
 }

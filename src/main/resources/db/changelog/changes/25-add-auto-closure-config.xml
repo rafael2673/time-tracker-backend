@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.17.xsd">
+
+    <changeSet id="29-add-auto-closure-config" author="rafael">
+        <addColumn tableName="workspaces">
+            <column name="auto_closure_enabled" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="closure_target_day" type="INT"/>
+            <column name="closure_count_type" type="VARCHAR(30)"/>
+            <column name="closure_shift_rule" type="VARCHAR(30)"/>
+            <column name="closure_pending_strategy" type="VARCHAR(30)"/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

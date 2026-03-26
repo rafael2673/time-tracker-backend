@@ -1,5 +1,8 @@
 package com.ap101gamestudio.timetracker.model;
 
+import com.ap101gamestudio.timetracker.model.enums.ClosureCountType;
+import com.ap101gamestudio.timetracker.model.enums.ClosurePendingStrategy;
+import com.ap101gamestudio.timetracker.model.enums.ClosureShiftRule;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -8,6 +11,7 @@ import java.util.UUID;
 
 @Entity
 @Getter
+@Setter
 @Table(name = "workspaces")
 public class Workspace {
 
@@ -27,6 +31,24 @@ public class Workspace {
 
     @Column(name = "radius_meters", nullable = false)
     private Integer radiusMeters;
+
+    @Column(name = "auto_closure_enabled", nullable = false)
+    private boolean autoClosureEnabled = false;
+
+    @Column(name = "closure_target_day")
+    private Integer closureTargetDay;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "closure_count_type")
+    private ClosureCountType closureCountType;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "closure_shift_rule")
+    private ClosureShiftRule closureShiftRule;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "closure_pending_strategy")
+    private ClosurePendingStrategy closurePendingStrategy;
 
     protected Workspace() {
     }

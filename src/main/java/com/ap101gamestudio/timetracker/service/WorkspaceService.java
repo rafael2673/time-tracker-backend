@@ -170,4 +170,24 @@ public class WorkspaceService {
         targetMembership.setActive(active);
         membershipRepository.save(targetMembership);
     }
+
+    @Transactional
+    public WorkspaceResponse updateAutoClosureSettings(UUID workspaceId, UpdateAutoClosureRequest request, String email) {
+        WorkspaceMembership workspaceMembership = validateManagerOrAdmin(email, workspaceId);
+        Workspace workspace = workspaceRepository.findById(workspaceId)
+                .orElseThrow(() -> new DomainException("error.workspace.not_found"));
+
+        workspace.setAutoClosureEnabled(request.autoClosureEnabled());
+        workspace.setClosureTargetDay(request.closureTargetDay());
+        workspace.setClosureCountType(request.closureCountType());
+        workspace.setClosureShiftRule(request.closureShiftRule());
+        workspace.setClosurePendingStrategy(request.closurePendingStrategy());
+
+        Workspace updatedWorkspace = workspaceRepository.save(workspace);
+        return mapToResponse(updatedWorkspace, workspaceMembership);
+    }
+
+    private WorkspaceResponse mapToResponse(Workspace workspace,  WorkspaceMembership workspaceMembership) {
+        return new WorkspaceResponse(workspace.getId(), workspace.getName(), workspaceMembership.getRole());
+    }
 }

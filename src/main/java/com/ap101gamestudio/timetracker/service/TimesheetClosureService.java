@@ -3,12 +3,15 @@ package com.ap101gamestudio.timetracker.service;
 import com.ap101gamestudio.timetracker.dto.*;
 import com.ap101gamestudio.timetracker.exceptions.DomainException;
 import com.ap101gamestudio.timetracker.model.*;
+import com.ap101gamestudio.timetracker.model.enums.ClosurePendingStrategy;
 import com.ap101gamestudio.timetracker.model.enums.OvertimeStrategy;
 import com.ap101gamestudio.timetracker.model.enums.UserRole;
 import com.ap101gamestudio.timetracker.repository.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.UUID;
 
@@ -19,12 +22,18 @@ public class TimesheetClosureService {
     private final WorkspaceMembershipRepository membershipRepository;
     private final TimeTrackingService timeTrackingService;
     private final UserRepository userRepository;
+    private final TimeRecordRepository recordRepository;
 
-    public TimesheetClosureService(MonthlyClosureRepository closureRepository, WorkspaceMembershipRepository membershipRepository, TimeTrackingService timeTrackingService, UserRepository userRepository) {
+    public TimesheetClosureService(MonthlyClosureRepository closureRepository,
+                                   WorkspaceMembershipRepository membershipRepository,
+                                   TimeTrackingService timeTrackingService,
+                                   UserRepository userRepository,
+                                   TimeRecordRepository recordRepository) {
         this.closureRepository = closureRepository;
         this.membershipRepository = membershipRepository;
         this.timeTrackingService = timeTrackingService;
         this.userRepository = userRepository;
+        this.recordRepository = recordRepository;
     }
 
     private void validateManagerAccess(String email, UUID workspaceId) {
@@ -44,6 +53,54 @@ public class TimesheetClosureService {
         return activeMembers.stream()
                 .map(member -> processAndSaveMemberClosure(member, workspaceId, year, month, previousMonth))
                 .toList();
+    }
+
+    @Transactional
+    public void executeAutoClosureForWorkspace(Workspace workspace, YearMonth yearMonth) {
+        int year = yearMonth.getYear();
+        int month = yearMonth.getMonthValue();
+
+        if (closureRepository.existsByWorkspaceIdAndReferenceYearAndReferenceMonth(workspace.getId(), year, month)) {
+            return;
+        }
+
+        List<WorkspaceMembership> members = getActiveMembers(workspace.getId());
+        LocalDateTime startOfMonth = yearMonth.atDay(1).atStartOfDay();
+        LocalDateTime endOfMonth = yearMonth.atEndOfMonth().atTime(23, 59, 59);
+        PreviousMonthDto previousMonth = getPreviousMonth(year, month);
+
+        for (WorkspaceMembership member : members) {
+            boolean hasPendingRecords = hasPendingApprovals(member.getUser().getId(), workspace.getId(), startOfMonth, endOfMonth);
+
+            if (hasPendingRecords && workspace.getClosurePendingStrategy() == ClosurePendingStrategy.BLOCKING) {
+                continue;
+            }
+
+            if (hasPendingRecords && workspace.getClosurePendingStrategy() == ClosurePendingStrategy.FORCE_CLOSE) {
+                rejectPendingRecords(member.getUser().getId(), workspace.getId(), startOfMonth, endOfMonth);
+            }
+
+            processAndSaveMemberClosure(member, workspace.getId(), year, month, previousMonth);
+        }
+    }
+
+    private boolean hasPendingApprovals(UUID userId, UUID workspaceId, LocalDateTime start, LocalDateTime end) {
+        List<TimeRecord> records = recordRepository.findByUserIdAndWorkspaceIdAndRegisteredAtBetween(userId, workspaceId, start, end);
+        return records.stream().anyMatch(TimeRecord::isPendingApprovation);
+    }
+
+    private void rejectPendingRecords(UUID userId, UUID workspaceId, LocalDateTime start, LocalDateTime end) {
+        List<TimeRecord> pendingRecords = recordRepository.findByUserIdAndWorkspaceIdAndRegisteredAtBetween(userId, workspaceId, start, end)
+                .stream()
+                .filter(TimeRecord::isPendingApprovation)
+                .toList();
+
+        for (TimeRecord record : pendingRecords) {
+            record.setPendingApprovation(false);
+            record.setRejected(true);
+        }
+
+        recordRepository.saveAll(pendingRecords);
     }
 
     private void validateMonthNotAlreadyClosed(UUID workspaceId, int year, int month) {
