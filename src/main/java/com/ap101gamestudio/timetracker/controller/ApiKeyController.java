@@ -22,7 +22,7 @@ public class ApiKeyController {
             Authentication authentication,
             @CurrentWorkspaceId UUID workspaceId
     ) {
-        String key = apiKeyService.getActiveKey(authentication.getName(), workspaceId);
+        String key = apiKeyService.getActiveKeyMasked(authentication.getName(), workspaceId);
         return ResponseEntity.ok(Map.of("apiKey", key != null ? key : ""));
     }
 

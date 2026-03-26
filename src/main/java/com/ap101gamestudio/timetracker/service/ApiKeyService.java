@@ -10,7 +10,9 @@ import com.ap101gamestudio.timetracker.repository.ApiKeyRepository;
 import com.ap101gamestudio.timetracker.repository.UserRepository;
 import com.ap101gamestudio.timetracker.repository.WorkspaceMembershipRepository;
 import com.ap101gamestudio.timetracker.repository.WorkspaceRepository;
+import com.ap101gamestudio.timetracker.utils.HashUtils;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,16 +23,18 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ApiKeyService {
 
+    @Value("${api.key.secret}")
+    private String apiSecret;
     private final ApiKeyRepository apiKeyRepository;
     private final WorkspaceRepository workspaceRepository;
     private final UserRepository userRepository;
     private final WorkspaceMembershipRepository membershipRepository;
 
-    public String getActiveKey(String email, UUID workspaceId) {
+    public String getActiveKeyMasked(String email, UUID workspaceId) {
         validateManagerAccess(email, workspaceId);
 
         return apiKeyRepository.findByWorkspaceIdAndActiveTrue(workspaceId)
-                .map(ApiKey::getKey)
+                .map(ApiKey::getMaskedKey)
                 .orElse(null);
     }
 
@@ -47,16 +51,19 @@ public class ApiKeyService {
         }
         apiKeyRepository.saveAll(activeKeys);
 
-        String newKeyValue = "tt_live_" + UUID.randomUUID().toString().replace("-", "");
-        
+        String rawKey = "tt_live_" + UUID.randomUUID().toString().replace("-", "");
+        String sha256HexKey = HashUtils.hashWithHmacSha256(rawKey, apiSecret);
+        String maskedKey = maskApiKey(rawKey);
+
         ApiKey newKey = new ApiKey();
-        newKey.setKey(newKeyValue);
+        newKey.setKey(sha256HexKey);
+        newKey.setMaskedKey(maskedKey);
         newKey.setWorkspace(workspace);
         newKey.setActive(true);
 
         apiKeyRepository.save(newKey);
 
-        return newKeyValue;
+        return rawKey;
     }
 
     private void validateManagerAccess(String email, UUID workspaceId) {
@@ -68,5 +75,11 @@ public class ApiKeyService {
         if (membership.getRole() == UserRole.EMPLOYEE) {
             throw new DomainException("error.permission.denied");
         }
+    }
+
+    private String maskApiKey(String fullKey) {
+        if (fullKey == null || fullKey.length() <= 12) return fullKey;
+        String suffix = fullKey.substring(fullKey.length() - 4);
+        return "tt_live_****************" + suffix;
     }
 }

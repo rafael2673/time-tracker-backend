@@ -1,5 +1,6 @@
 package com.ap101gamestudio.timetracker.security;
 
+import com.ap101gamestudio.timetracker.model.User;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
@@ -38,10 +39,6 @@ public class JwtService {
         return claimsResolver.apply(claims);
     }
 
-    public String generateToken(UserDetails userDetails) {
-        return generateToken(new HashMap<>(), userDetails);
-    }
-
     public String generateToken(Map<String, Object> extraClaims, UserDetails userDetails) {
         return Jwts.builder()
                 .claims(extraClaims)
@@ -76,5 +73,13 @@ public class JwtService {
     private SecretKey getSignInKey() {
         byte[] keyBytes = Decoders.BASE64.decode(secretKey);
         return Keys.hmacShaKeyFor(keyBytes);
+    }
+
+    public String generateStandardUserToken(User user, UUID workspaceId) {
+        Map<String, Object> extraClaims = new HashMap<>();
+        if (workspaceId != null) {
+            extraClaims.put("workspaceId", workspaceId.toString());
+        }
+        return generateToken(extraClaims, user);
     }
 }

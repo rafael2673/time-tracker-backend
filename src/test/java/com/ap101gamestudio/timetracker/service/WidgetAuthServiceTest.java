@@ -7,12 +7,14 @@ import com.ap101gamestudio.timetracker.model.ApiKey;
 import com.ap101gamestudio.timetracker.model.User;
 import com.ap101gamestudio.timetracker.model.WorkPolicy;
 import com.ap101gamestudio.timetracker.model.Workspace;
+import com.ap101gamestudio.timetracker.model.WorkspaceMembership;
 import com.ap101gamestudio.timetracker.repository.ApiKeyRepository;
 import com.ap101gamestudio.timetracker.repository.UserRepository;
 import com.ap101gamestudio.timetracker.repository.WorkPolicyRepository;
 import com.ap101gamestudio.timetracker.repository.WorkspaceMembershipRepository;
 import com.ap101gamestudio.timetracker.security.JwtService;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -27,7 +29,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 
 @ExtendWith(MockitoExtension.class)
 class WidgetAuthServiceTest {
@@ -50,10 +53,15 @@ class WidgetAuthServiceTest {
     @InjectMocks
     private WidgetAuthService widgetAuthService;
 
+    @BeforeEach
+    void setUp() {
+        ReflectionTestUtils.setField(widgetAuthService, "apiSecret", "test_secret");
+    }
+
     @Test
     void shouldThrowExceptionForInvalidApiKey() {
         WidgetLoginRequest request = new WidgetLoginRequest("invalid_key", "test@test.com", "Name");
-        Mockito.when(apiKeyRepository.findByKeyAndActiveTrue("invalid_key")).thenReturn(Optional.empty());
+        Mockito.when(apiKeyRepository.findByKeyAndActiveTrue(anyString())).thenReturn(Optional.empty());
 
         Assertions.assertThrows(BadCredentialsException.class, () -> widgetAuthService.authenticateFromWidget(request));
     }
@@ -65,7 +73,7 @@ class WidgetAuthServiceTest {
         apiKey.setWorkspace(null);
 
         WidgetLoginRequest request = new WidgetLoginRequest("valid_key", "test@test.com", "Name");
-        Mockito.when(apiKeyRepository.findByKeyAndActiveTrue("valid_key")).thenReturn(Optional.of(apiKey));
+        Mockito.when(apiKeyRepository.findByKeyAndActiveTrue(anyString())).thenReturn(Optional.of(apiKey));
 
         Assertions.assertThrows(DomainException.class, () -> widgetAuthService.authenticateFromWidget(request));
     }
@@ -86,15 +94,15 @@ class WidgetAuthServiceTest {
 
         WidgetLoginRequest request = new WidgetLoginRequest("valid_key", "test@test.com", "Name");
 
-        Mockito.when(apiKeyRepository.findByKeyAndActiveTrue("valid_key")).thenReturn(Optional.of(apiKey));
+        Mockito.when(apiKeyRepository.findByKeyAndActiveTrue(anyString())).thenReturn(Optional.of(apiKey));
         Mockito.when(userRepository.findByEmail("test@test.com")).thenReturn(Optional.of(user));
         Mockito.when(membershipRepository.findByUserIdAndWorkspaceId(any(), any())).thenReturn(Optional.empty());
         Mockito.when(workPolicyRepository.findByWorkspaceId(workspace.getId())).thenReturn(List.of(defaultPolicy));
-        Mockito.when(jwtService.generateToken(anyMap(), any(User.class))).thenReturn("valid_jwt_token");
+        Mockito.when(jwtService.generateStandardUserToken(any(User.class), eq(workspace.getId()))).thenReturn("valid_jwt_token");
 
        WidgetLoginResponse loginResponse = widgetAuthService.authenticateFromWidget(request);
 
         Assertions.assertEquals("valid_jwt_token", loginResponse.token());
-        Mockito.verify(membershipRepository, Mockito.times(1)).save(any());
+        Mockito.verify(membershipRepository, Mockito.times(1)).save(any(WorkspaceMembership.class));
     }
 }

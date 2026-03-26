@@ -10,6 +10,7 @@ import com.ap101gamestudio.timetracker.model.LinkCode;
 import com.ap101gamestudio.timetracker.model.User;
 import com.ap101gamestudio.timetracker.repository.LinkCodeRepository;
 import com.ap101gamestudio.timetracker.repository.UserRepository;
+import com.ap101gamestudio.timetracker.repository.WorkspaceMembershipRepository;
 import com.ap101gamestudio.timetracker.security.JwtService;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -19,12 +20,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Service
 public class AuthenticationService {
 
     private final UserRepository userRepository;
     private final LinkCodeRepository linkCodeRepository;
+    private final WorkspaceMembershipRepository membershipRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
@@ -32,12 +35,14 @@ public class AuthenticationService {
     public AuthenticationService(
             UserRepository userRepository,
             LinkCodeRepository linkCodeRepository,
+            WorkspaceMembershipRepository membershipRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
             AuthenticationManager authenticationManager
     ) {
         this.userRepository = userRepository;
         this.linkCodeRepository = linkCodeRepository;
+        this.membershipRepository = membershipRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.authenticationManager = authenticationManager;
@@ -49,14 +54,14 @@ public class AuthenticationService {
             throw new DomainException("error.email.already.in.use");
         }
 
-        var user = new User(
+        User user = new User(
                 request.email(),
                 passwordEncoder.encode(request.password()),
                 request.fullName()
         );
 
         userRepository.save(user);
-        var jwtToken = jwtService.generateToken(user);
+        String jwtToken = jwtService.generateStandardUserToken(user, null);
         return new JwtAuthenticationResponse(jwtToken, 86400000L);
     }
 
@@ -67,10 +72,16 @@ public class AuthenticationService {
                         request.password()
                 )
         );
-        var user = userRepository.findByEmail(request.email())
+        User user = userRepository.findByEmail(request.email())
                 .orElseThrow(() -> new DomainException("error.user.not_found"));
 
-        var jwtToken = jwtService.generateToken(user);
+        UUID defaultWorkspaceId = membershipRepository.findByUserId(user.getId())
+                .stream()
+                .findFirst()
+                .map(membership -> membership.getWorkspace().getId())
+                .orElse(null);
+
+        String jwtToken = jwtService.generateStandardUserToken(user, defaultWorkspaceId);
         return new JwtAuthenticationResponse(jwtToken, 86400000L);
     }
 
@@ -91,20 +102,25 @@ public class AuthenticationService {
     @Transactional
     public JwtAuthenticationResponse linkAccount(LinkAccountRequest request) {
         LinkCode linkCode = linkCodeRepository.findByCode(request.code())
-                .orElseThrow(() -> new DomainException("Invalid linking code"));
+                .orElseThrow(() -> new DomainException("error.linking.code.invalid"));
 
         if (linkCode.getExpiresAt().isBefore(LocalDateTime.now())) {
             linkCodeRepository.delete(linkCode);
-            throw new DomainException("error.expired.linking.code");
+            throw new DomainException("error.linking.code.expired");
         }
 
         User user = linkCode.getUser();
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
         userRepository.save(user);
-
         linkCodeRepository.delete(linkCode);
 
-        var jwtToken = jwtService.generateToken(user);
+        UUID defaultWorkspaceId = membershipRepository.findByUserId(user.getId())
+                .stream()
+                .findFirst()
+                .map(membership -> membership.getWorkspace().getId())
+                .orElse(null);
+
+        String jwtToken = jwtService.generateStandardUserToken(user, defaultWorkspaceId);
         return new JwtAuthenticationResponse(jwtToken, 86400000L);
     }
 }

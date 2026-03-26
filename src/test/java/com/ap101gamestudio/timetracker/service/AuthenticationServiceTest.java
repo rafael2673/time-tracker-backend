@@ -18,6 +18,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 
 @ExtendWith(MockitoExtension.class)
 class AuthenticationServiceTest {
@@ -52,7 +53,7 @@ class AuthenticationServiceTest {
 
         Mockito.when(userRepository.findByEmail(email)).thenReturn(Optional.empty());
         Mockito.when(passwordEncoder.encode("123456")).thenReturn("hashed_password");
-        Mockito.when(jwtService.generateToken(any(User.class))).thenReturn("fake_token");
+        Mockito.when(jwtService.generateStandardUserToken(any(User.class), eq(null))).thenReturn("fake_token");
 
         JwtAuthenticationResponse response = authenticationService.register(request);
 

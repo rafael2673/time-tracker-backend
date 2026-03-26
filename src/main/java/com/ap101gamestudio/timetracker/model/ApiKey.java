@@ -15,6 +15,9 @@ public class ApiKey {
     @Column(name = "`key`", nullable = false, unique = true)
     private String key;
 
+    @Column(name = "masked_key")
+    private String maskedKey;
+
     @Column(nullable = false)
     private String companyName;
 
