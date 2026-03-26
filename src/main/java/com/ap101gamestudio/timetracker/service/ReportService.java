@@ -225,15 +225,17 @@ public class ReportService {
         CellStyle baseDataStyle = styles.dataStyle();
 
         if (specialDate.isPresent() && isFullDayHoliday(specialDate.get())) {
-            String holidayLabel = messageSource.getMessage("report.holiday", null, locale);
-            String holidayJustification = normalizeDescription(specialDate.get().getDescription());
-            fillExceptionRow(row, currentDate, dayName, holidayLabel, holidayJustification, styles.weekendStyle());
+            String holidayDesc = normalizeDescription(specialDate.get().getDescription());
+            if (holidayDesc.isEmpty()) {
+                holidayDesc = messageSource.getMessage("report.holiday", null, locale);
+            }
+            fillExceptionRow(row, currentDate, dayName, holidayDesc, holidayDesc, styles.weekendStyle());
             return new DailyRowResult(0, styles.weekendStyle());
         }
 
         if (!isWorkingDay) {
             String weekendLabel = messageSource.getMessage("report.weekend", null, locale);
-            fillExceptionRow(row, currentDate, dayName, weekendLabel, weekendLabel, styles.weekendStyle());
+            fillExceptionRow(row, currentDate, dayName, weekendLabel, "", styles.weekendStyle());
             return new DailyRowResult(0, styles.weekendStyle());
         }
 
@@ -351,18 +353,14 @@ public class ReportService {
 
         String justification;
         String absenceStr = messageSource.getMessage("report.absence", null, locale);
-        String partialStr = messageSource.getMessage("report.partial_holiday", null, locale);
-        String observation = records.isEmpty() ? absenceStr : "";
+        String observation;
 
         if (partialHolidayDesc != null) {
             justification = partialHolidayDesc;
-            observation = observation.isEmpty() ? partialStr : observation + " - " + partialStr;
+            observation = records.isEmpty() ? partialHolidayDesc + " / " + absenceStr : partialHolidayDesc;
         } else {
-            justification = records.stream()
-                    .map(TimeRecord::getJustification)
-                    .filter(j -> j != null && !j.isBlank())
-                    .findFirst()
-                    .orElse("");
+            justification = "";
+            observation = records.isEmpty() ? absenceStr : "";
         }
         
         createCell(row, 10, justification, styles.justificationStyle());
@@ -461,6 +459,17 @@ public class ReportService {
         }
     }
 
+    private CellStyle createBaseBorderStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        return style;
+    }
+
     private ReportStyles createStyles(Workbook workbook) {
         Font titleFont = workbook.createFont();
         titleFont.setBold(true);
@@ -501,24 +510,13 @@ public class ReportService {
         metaValueStyle.setFillForegroundColor(IndexedColors.WHITE.getIndex());
         metaValueStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
 
-        CellStyle headerStyle = workbook.createCellStyle();
+        CellStyle headerStyle = createBaseBorderStyle(workbook);
         headerStyle.setFont(boldWhiteFont);
         headerStyle.setFillForegroundColor(IndexedColors.ROYAL_BLUE.getIndex());
         headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-        headerStyle.setBorderBottom(BorderStyle.THIN);
-        headerStyle.setBorderTop(BorderStyle.THIN);
-        headerStyle.setBorderLeft(BorderStyle.THIN);
-        headerStyle.setBorderRight(BorderStyle.THIN);
-        headerStyle.setAlignment(HorizontalAlignment.CENTER);
-        headerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
         headerStyle.setWrapText(true);
 
-        CellStyle dataStyleEven = workbook.createCellStyle();
-        dataStyleEven.setBorderBottom(BorderStyle.THIN);
-        dataStyleEven.setBorderTop(BorderStyle.THIN);
-        dataStyleEven.setBorderLeft(BorderStyle.THIN);
-        dataStyleEven.setBorderRight(BorderStyle.THIN);
-        dataStyleEven.setAlignment(HorizontalAlignment.CENTER);
+        CellStyle dataStyleEven = createBaseBorderStyle(workbook);
         dataStyleEven.setVerticalAlignment(VerticalAlignment.TOP);
         dataStyleEven.setWrapText(true);
 
@@ -527,13 +525,7 @@ public class ReportService {
         dataStyleOdd.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
         dataStyleOdd.setFillPattern(FillPatternType.SOLID_FOREGROUND);
 
-        CellStyle dataStyle = workbook.createCellStyle();
-        dataStyle.setBorderBottom(BorderStyle.THIN);
-        dataStyle.setBorderTop(BorderStyle.THIN);
-        dataStyle.setBorderLeft(BorderStyle.THIN);
-        dataStyle.setBorderRight(BorderStyle.THIN);
-        dataStyle.setAlignment(HorizontalAlignment.CENTER);
-        dataStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+        CellStyle dataStyle = createBaseBorderStyle(workbook);
         dataStyle.setWrapText(false);
 
         CellStyle justificationStyle = workbook.createCellStyle();
@@ -552,22 +544,13 @@ public class ReportService {
         weeklyTotalStyle.setFont(boldWhiteFont);
         weeklyTotalStyle.setFillForegroundColor(IndexedColors.ROYAL_BLUE.getIndex());
         weeklyTotalStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-        weeklyTotalStyle.setAlignment(HorizontalAlignment.CENTER);
-        weeklyTotalStyle.setVerticalAlignment(VerticalAlignment.CENTER);
 
-        CellStyle totalBorderStyle = workbook.createCellStyle();
-        totalBorderStyle.setBorderBottom(BorderStyle.THIN);
-        totalBorderStyle.setBorderTop(BorderStyle.THIN);
-        totalBorderStyle.setBorderLeft(BorderStyle.THIN);
-        totalBorderStyle.setBorderRight(BorderStyle.THIN);
-        totalBorderStyle.setAlignment(HorizontalAlignment.CENTER);
-        totalBorderStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+        CellStyle totalBorderStyle = createBaseBorderStyle(workbook);
         totalBorderStyle.setFillForegroundColor(IndexedColors.WHITE.getIndex());
         totalBorderStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
 
         CellStyle totalLabelStyle = workbook.createCellStyle();
         totalLabelStyle.cloneStyleFrom(headerStyle);
-        totalLabelStyle.setAlignment(HorizontalAlignment.CENTER);
 
         CellStyle totalBandStyle = workbook.createCellStyle();
         totalBandStyle.cloneStyleFrom(totalLabelStyle);
@@ -577,7 +560,6 @@ public class ReportService {
         totalValueStyle.setFillForegroundColor(IndexedColors.PALE_BLUE.getIndex());
         totalValueStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
         totalValueStyle.setFont(boldFont);
-        totalValueStyle.setAlignment(HorizontalAlignment.CENTER);
 
         CellStyle signatureStyle = workbook.createCellStyle();
         signatureStyle.setAlignment(HorizontalAlignment.CENTER);
