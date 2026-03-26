@@ -100,7 +100,7 @@ public class TimeRecordController {
         return ResponseEntity.noContent().build();
     }
 
-    @DeleteMapping("/{id}/reject")
+    @PatchMapping("/{id}/reject")
     public ResponseEntity<Void> rejectRecord(
             @CurrentWorkspaceId UUID workspaceId,
             @PathVariable UUID id,

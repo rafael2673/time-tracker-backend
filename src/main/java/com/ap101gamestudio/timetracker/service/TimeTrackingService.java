@@ -308,7 +308,7 @@ public class TimeTrackingService {
 
     private List<TimeRecord> filterActiveRecords(List<TimeRecord> records) {
         List<UUID> supersededIds = records.stream()
-                .filter(r -> r.getEditedFrom() != null)
+                .filter(r -> r.getEditedFrom() != null && !r.isPendingApprovation() && !r.isRejected())
                 .map(r -> r.getEditedFrom().getId())
                 .toList();
 
@@ -438,19 +438,30 @@ public class TimeTrackingService {
 
     public void approveRecord(String email, UUID workspaceId, UUID recordId) {
         validateManagerAccess(email, workspaceId);
-        TimeRecord record = timeRecordRepository.findById(recordId).orElseThrow(() -> new DomainException("error.record.not_found"));
-        if (!record.getWorkspace().getId().equals(workspaceId)) throw new DomainException("error.permission.denied");
+        TimeRecord record = timeRecordRepository.findById(recordId)
+                .orElseThrow(() -> new DomainException("error.record.not_found"));
+
+        if (!record.getWorkspace().getId().equals(workspaceId)) {
+            throw new DomainException("error.permission.denied");
+        }
 
         record.setPendingApprovation(false);
+        record.setRejected(false);
         timeRecordRepository.save(record);
     }
 
     public void rejectRecord(String email, UUID workspaceId, UUID recordId) {
         validateManagerAccess(email, workspaceId);
-        TimeRecord record = timeRecordRepository.findById(recordId).orElseThrow(() -> new DomainException("error.record.not_found"));
-        if (!record.getWorkspace().getId().equals(workspaceId)) throw new DomainException("error.permission.denied");
+        TimeRecord record = timeRecordRepository.findById(recordId)
+                .orElseThrow(() -> new DomainException("error.record.not_found"));
 
-        timeRecordRepository.delete(record);
+        if (!record.getWorkspace().getId().equals(workspaceId)) {
+            throw new DomainException("error.permission.denied");
+        }
+
+        record.setPendingApprovation(false);
+        record.setRejected(true);
+        timeRecordRepository.save(record);
     }
 
     public PageResponse<PendingRecordResponse> getApprovalHistory(String email, UUID workspaceId, String search, String date, int page, int size) {
