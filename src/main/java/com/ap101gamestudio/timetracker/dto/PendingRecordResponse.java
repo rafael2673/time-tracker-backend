@@ -9,5 +9,6 @@ public record PendingRecordResponse(
         String employeeName,
         RecordType recordType,
         LocalDateTime registeredAt,
-        String justification
+        String justification,
+        boolean rejected
 ) {}

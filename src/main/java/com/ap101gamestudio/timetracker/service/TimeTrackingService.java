@@ -101,6 +101,8 @@ public class TimeTrackingService {
                 originalRecord
         );
 
+        newRecord.setPendingApprovation(true);
+
         TimeRecord saved = timeRecordRepository.save(newRecord);
         return mapToResponse(saved);
     }
@@ -430,7 +432,7 @@ public class TimeTrackingService {
         org.springframework.data.domain.Page<TimeRecord> result = timeRecordRepository.findPendingWithSearch(workspaceId, search, pageable);
 
         List<PendingRecordResponse> content = result.getContent().stream()
-                .map(r -> new PendingRecordResponse(r.getId(), r.getUser().getFullName(), r.getRecordType(), r.getRegisteredAt(), r.getJustification()))
+                .map(r -> new PendingRecordResponse(r.getId(), r.getUser().getFullName(), r.getRecordType(), r.getRegisteredAt(), r.getJustification(), r.isRejected()))
                 .toList();
 
         return new PageResponse<>(content, result.getTotalPages(), result.getTotalElements(), result.getNumber());
@@ -464,15 +466,17 @@ public class TimeTrackingService {
         timeRecordRepository.save(record);
     }
 
-    public PageResponse<PendingRecordResponse> getApprovalHistory(String email, UUID workspaceId, String search, String date, int page, int size) {
+    public PageResponse<PendingRecordResponse> getApprovalHistory(String email, UUID workspaceId, String search, String date, String status, int page, int size) {
         validateManagerAccess(email, workspaceId);
         Pageable pageable = PageRequest.of(page, size, Sort.by("registeredAt").descending());
 
         Integer[] parsed = DateFilterUtils.parseDateFilter(date);
-        Page<TimeRecord> result = timeRecordRepository.findHistoryWithFilters(workspaceId, search, parsed[0], parsed[1], parsed[2], pageable);
+        String finalStatus = (status == null || status.isBlank()) ? null : status.toUpperCase();
+
+        Page<TimeRecord> result = timeRecordRepository.findHistoryWithFilters(workspaceId, search, parsed[0], parsed[1], parsed[2], finalStatus, pageable);
 
         List<PendingRecordResponse> content = result.getContent().stream()
-                .map(r -> new PendingRecordResponse(r.getId(), r.getUser().getFullName(), r.getRecordType(), r.getRegisteredAt(), r.getJustification()))
+                .map(r -> new PendingRecordResponse(r.getId(), r.getUser().getFullName(), r.getRecordType(), r.getRegisteredAt(), r.getJustification(), r.isRejected()))
                 .toList();
 
         return new PageResponse<>(content, result.getTotalPages(), result.getTotalElements(), result.getNumber());

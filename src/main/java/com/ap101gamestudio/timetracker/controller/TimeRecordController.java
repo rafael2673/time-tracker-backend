@@ -115,10 +115,11 @@ public class TimeRecordController {
             @CurrentWorkspaceId UUID workspaceId,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String date,
+            @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             Authentication authentication
     ) {
-        return ResponseEntity.ok(timeTrackingService.getApprovalHistory(authentication.getName(), workspaceId, search, date, page, size));
+        return ResponseEntity.ok(timeTrackingService.getApprovalHistory(authentication.getName(), workspaceId, search, date, status, page, size));
     }
 }

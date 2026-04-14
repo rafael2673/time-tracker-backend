@@ -47,12 +47,10 @@ public class TimeRecord {
     @JoinColumn(name = "edited_from_id")
     private TimeRecord editedFrom;
 
-    @Getter
     @Setter
     @Column(name = "pending_approvation", nullable = false)
     private boolean pendingApprovation = false;
 
-    @Getter
     @Setter
     @Column(name = "rejected", nullable = false)
     private boolean rejected = false;
