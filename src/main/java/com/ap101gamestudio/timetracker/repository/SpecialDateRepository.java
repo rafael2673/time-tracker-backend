@@ -14,6 +14,7 @@ import java.util.UUID;
 
 @Repository
 public interface SpecialDateRepository extends JpaRepository<SpecialDate, UUID> {
+    List<SpecialDate> findByWorkspaceId(UUID workspaceId);
 
     @Query("SELECT s FROM SpecialDate s WHERE s.workspace.id = :workspaceId AND (s.isRecurring = true OR (s.date >= :startDate AND s.date <= :endDate))")
     List<SpecialDate> findRelevantDates(@Param("workspaceId") UUID workspaceId, @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);

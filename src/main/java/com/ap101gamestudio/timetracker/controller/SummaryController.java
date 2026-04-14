@@ -5,6 +5,8 @@ import com.ap101gamestudio.timetracker.dto.DailySummaryResponse;
 import com.ap101gamestudio.timetracker.dto.EmployeeDashboardSummary;
 import com.ap101gamestudio.timetracker.dto.MonthSummaryResponse;
 import com.ap101gamestudio.timetracker.dto.MonthlyBalanceResponse;
+import com.ap101gamestudio.timetracker.dto.NextHolidayResponse;
+import com.ap101gamestudio.timetracker.dto.AbsencePieChartResponse;
 import com.ap101gamestudio.timetracker.service.SummaryService;
 import com.ap101gamestudio.timetracker.service.TimeTrackingService;
 import org.springframework.http.ResponseEntity;
@@ -87,5 +89,31 @@ public class SummaryController {
             Authentication authentication
     ) {
         return ResponseEntity.ok(timeTrackingService.getQuarterlyBalance(authentication.getName(), year, quarter, workspaceId));
+    }
+
+    @GetMapping("/next-holiday")
+    public ResponseEntity<NextHolidayResponse> getNextHoliday(
+            @CurrentWorkspaceId UUID workspaceId
+    ) {
+        return ResponseEntity.ok(summaryService.getNextSpecialDate(workspaceId));
+    }
+
+    @GetMapping("/company/absences")
+    public ResponseEntity<AbsencePieChartResponse> getCompanyAbsences(
+            @CurrentWorkspaceId UUID workspaceId,
+            @RequestParam int year,
+            @RequestParam int month
+    ) {
+        return ResponseEntity.ok(summaryService.getCompanyAbsences(workspaceId, year, month));
+    }
+
+    @GetMapping("/company/yearly")
+    public ResponseEntity<List<MonthSummaryResponse>> getCompanyYearlyAverage(
+            @CurrentWorkspaceId UUID workspaceId,
+            @RequestParam int year,
+            @RequestParam(required = false) UUID policyId,
+            @RequestHeader("Accept-Language") String locale
+    ) {
+        return ResponseEntity.ok(summaryService.getCompanyYearlyAverage(workspaceId, year, policyId, locale));
     }
 }
