@@ -1,27 +1,39 @@
 package com.ap101gamestudio.timetracker.service;
 
 import com.ap101gamestudio.timetracker.dto.PageResponse;
-import com.ap101gamestudio.timetracker.dto.BrasilApiHolidayResponse;
+import com.ap101gamestudio.timetracker.dto.FeriadosApiResponse;
 import com.ap101gamestudio.timetracker.dto.SpecialDateRequest;
 import com.ap101gamestudio.timetracker.dto.SpecialDateResponse;
 import com.ap101gamestudio.timetracker.exceptions.DomainException;
 import com.ap101gamestudio.timetracker.model.SpecialDate;
 import com.ap101gamestudio.timetracker.model.User;
 import com.ap101gamestudio.timetracker.model.Workspace;
+import com.ap101gamestudio.timetracker.model.WorkspaceHolidaySync;
 import com.ap101gamestudio.timetracker.model.WorkspaceMembership;
 import com.ap101gamestudio.timetracker.model.enums.UserRole;
 import com.ap101gamestudio.timetracker.repository.SpecialDateRepository;
 import com.ap101gamestudio.timetracker.repository.UserRepository;
+import com.ap101gamestudio.timetracker.repository.WorkspaceHolidaySyncRepository;
 import com.ap101gamestudio.timetracker.repository.WorkspaceMembershipRepository;
 import com.ap101gamestudio.timetracker.repository.WorkspaceRepository;
 import com.ap101gamestudio.timetracker.utils.DateFilterUtils;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -32,12 +44,23 @@ public class SpecialDateService {
     private final WorkspaceRepository workspaceRepository;
     private final UserRepository userRepository;
     private final WorkspaceMembershipRepository membershipRepository;
+    private final WorkspaceHolidaySyncRepository syncRepository;
+    private final RestTemplate restTemplate;
 
-    public SpecialDateService(SpecialDateRepository specialDateRepository, WorkspaceRepository workspaceRepository, UserRepository userRepository, WorkspaceMembershipRepository membershipRepository) {
+    @Value("${app.feriados-api.token}")
+    private String apiToken;
+
+    public SpecialDateService(SpecialDateRepository specialDateRepository,
+                              WorkspaceRepository workspaceRepository,
+                              UserRepository userRepository,
+                              WorkspaceMembershipRepository membershipRepository,
+                              WorkspaceHolidaySyncRepository syncRepository) {
         this.specialDateRepository = specialDateRepository;
         this.workspaceRepository = workspaceRepository;
         this.userRepository = userRepository;
         this.membershipRepository = membershipRepository;
+        this.syncRepository = syncRepository;
+        this.restTemplate = new RestTemplate();
     }
 
     private void validateManagerAccess(String email, UUID workspaceId) {
@@ -71,7 +94,13 @@ public class SpecialDateService {
         return new SpecialDateResponse(saved.getId(), saved.getDate(), saved.getDescription(), saved.getWorkloadMultiplier(), saved.isRecurring());
     }
 
+    @Transactional
     public PageResponse<SpecialDateResponse> getByYear(UUID workspaceId, int year, String search, String exactDate, int page, int size) {
+        Workspace workspace = workspaceRepository.findById(workspaceId)
+                .orElseThrow(() -> new DomainException("error.workspace.not_found"));
+
+        garantirSincronizacaoAnual(workspace, year);
+
         LocalDate start = LocalDate.of(year, 1, 1);
         LocalDate end = LocalDate.of(year, 12, 31);
         Pageable pageable = PageRequest.of(page, size, Sort.by("date").ascending());
@@ -93,34 +122,65 @@ public class SpecialDateService {
         specialDateRepository.delete(specialDate);
     }
 
-    public void importNationalHolidays(String email, UUID workspaceId, int year) {
-        validateManagerAccess(email, workspaceId);
-        Workspace workspace = workspaceRepository.findById(workspaceId).orElseThrow(() -> new DomainException("error.workspace.not_found"));
+    private void garantirSincronizacaoAnual(Workspace workspace, int year) {
+        if (syncRepository.findByWorkspaceIdAndYear(workspace.getId(), year).isPresent()) {
+            return;
+        }
 
-        String url = "https://brasilapi.com.br/api/feriados/v1/" + year;
-        org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
+        List<FeriadosApiResponse> feriadosEncontrados = buscarFeriadosNaApiExterna(workspace, year);
+        mesclarESalvarNovasDatas(workspace, feriadosEncontrados, year);
+        syncRepository.save(new WorkspaceHolidaySync(workspace, year));
+    }
+
+    private List<FeriadosApiResponse> buscarFeriadosNaApiExterna(Workspace workspace, int year) {
+        List<FeriadosApiResponse> todosFeriados = new ArrayList<>();
+
+        todosFeriados.addAll(requisitarApi("/nacionais", year));
+
+        if (workspace.getStateUf() != null && !workspace.getStateUf().isBlank()) {
+            todosFeriados.addAll(requisitarApi("/estado/" + workspace.getStateUf(), year));
+        }
+
+        if (workspace.getIbgeCode() != null && !workspace.getIbgeCode().isBlank()) {
+            todosFeriados.addAll(requisitarApi("/cidade/" + workspace.getIbgeCode(), year));
+        }
+
+        return todosFeriados;
+    }
+
+    private List<FeriadosApiResponse> requisitarApi(String endpoint, int year) {
+        String url = "https://feriadosapi.com/api/v1/feriados" + endpoint + "?ano=" + year;
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(apiToken);
+        HttpEntity<String> entity = new HttpEntity<>(headers);
 
         try {
-            BrasilApiHolidayResponse[] holidays = restTemplate.getForObject(url, BrasilApiHolidayResponse[].class);
-            if (holidays != null) {
-                LocalDate start = LocalDate.of(year, 1, 1);
-                LocalDate end = LocalDate.of(year, 12, 31);
-                List<SpecialDate> existingDates = specialDateRepository.findRelevantDates(workspaceId, start, end);
-
-                for (BrasilApiHolidayResponse h : holidays) {
-                    LocalDate hDate = LocalDate.parse(h.date());
-                    boolean exists = existingDates.stream().anyMatch(sd ->
-                            sd.getDate().equals(hDate) ||
-                                    (sd.isRecurring() && sd.getDate().getMonth() == hDate.getMonth() && sd.getDate().getDayOfMonth() == hDate.getDayOfMonth())
-                    );
-                    if (!exists) {
-                        SpecialDate sd = new SpecialDate(workspace, hDate, h.name(), 0.0, false);
-                        specialDateRepository.save(sd);
-                    }
-                }
-            }
+            ResponseEntity<List<FeriadosApiResponse>> response = restTemplate.exchange(
+                    url, HttpMethod.GET, entity, new ParameterizedTypeReference<List<FeriadosApiResponse>>() {}
+            );
+            return response.getBody() != null ? response.getBody() : Collections.emptyList();
         } catch (Exception e) {
-            throw new DomainException("error.import.failed");
+            return Collections.emptyList();
+        }
+    }
+
+    private void mesclarESalvarNovasDatas(Workspace workspace, List<FeriadosApiResponse> feriadosApi, int year) {
+        LocalDate start = LocalDate.of(year, 1, 1);
+        LocalDate end = LocalDate.of(year, 12, 31);
+        List<SpecialDate> existentes = specialDateRepository.findRelevantDates(workspace.getId(), start, end);
+
+        for (FeriadosApiResponse f : feriadosApi) {
+            LocalDate dataFeriado = LocalDate.parse(f.date());
+
+            boolean jaExiste = existentes.stream().anyMatch(sd ->
+                    sd.getDate().equals(dataFeriado) ||
+                            (sd.isRecurring() && sd.getDate().getMonth() == dataFeriado.getMonth() && sd.getDate().getDayOfMonth() == dataFeriado.getDayOfMonth())
+            );
+
+            if (!jaExiste) {
+                specialDateRepository.save(new SpecialDate(workspace, dataFeriado, f.name(), 0.0, false));
+            }
         }
     }
 }

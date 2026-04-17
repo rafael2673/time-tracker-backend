@@ -21,4 +21,17 @@
         </createTable>
     </changeSet>
 
+    <changeSet id="05-insert-dev-api-key" author="rafael">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM api_keys WHERE company_name = 'Intersistemas (Local Dev)';
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="api_keys">
+            <column name="key" value="TESTE_DEV_123"/>
+            <column name="company_name" value="Intersistemas (Local Dev)"/>
+            <column name="active" valueBoolean="true"/>
+        </insert>
+    </changeSet>
+
 </databaseChangeLog>

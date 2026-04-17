@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.9.xsd">
+
+    <changeSet id="27-add-workspace-sync-control" author="rafael">
+        <addColumn tableName="workspaces">
+            <column name="state_uf" type="VARCHAR(2)"/>
+            <column name="ibge_code" type="VARCHAR(7)"/>
+        </addColumn>
+
+        <createTable tableName="workspace_holiday_syncs">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="workspace_id" type="UUID">
+                <constraints nullable="false" foreignKeyName="fk_sync_workspace" referencedTableName="workspaces" referencedColumnNames="id"/>
+            </column>
+            <column name="year" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="synced_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint tableName="workspace_holiday_syncs" columnNames="workspace_id, year" constraintName="uk_workspace_year_sync"/>
+    </changeSet>
+</databaseChangeLog>

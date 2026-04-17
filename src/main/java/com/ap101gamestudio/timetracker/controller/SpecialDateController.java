@@ -62,14 +62,4 @@ public class SpecialDateController {
         specialDateService.delete(authentication.getName(), workspaceId, id);
         return ResponseEntity.noContent().build();
     }
-
-    @PostMapping("/import-national")
-    public ResponseEntity<Void> importNationalHolidays(
-            @CurrentWorkspaceId UUID workspaceId,
-            @RequestParam int year,
-            Authentication authentication
-    ) {
-        specialDateService.importNationalHolidays(authentication.getName(), workspaceId, year);
-        return ResponseEntity.ok().build();
-    }
 }

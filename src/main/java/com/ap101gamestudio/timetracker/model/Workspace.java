@@ -50,6 +50,12 @@ public class Workspace {
     @Column(name = "closure_pending_strategy")
     private ClosurePendingStrategy closurePendingStrategy;
 
+    @Column(name = "state_uf", length = 2)
+    private String stateUf;
+
+    @Column(name = "ibge_code", length = 7)
+    private String ibgeCode;
+
     protected Workspace() {
     }
 
