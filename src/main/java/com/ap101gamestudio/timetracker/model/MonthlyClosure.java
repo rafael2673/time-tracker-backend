@@ -58,7 +58,7 @@ public class MonthlyClosure {
     @Column(name = "dsr_discount_hours", nullable = false)
     private double dsrDiscountHours = 0.0;
 
-    protected MonthlyClosure() {}
+    public MonthlyClosure() {}
 
     public MonthlyClosure(
             Workspace workspace, User user, int referenceYear,

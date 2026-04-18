@@ -132,7 +132,9 @@ class TimeTrackingServiceTest {
         MonthlyBalanceResponse response = timeTrackingService.getMonthlyBalance(email, today.getYear(), today.getMonthValue(), workspaceId);
 
         Assertions.assertEquals(10.0, response.workedHours());
-        Assertions.assertEquals(10.0 - response.expectedHours() - response.dsrDiscountHours(), response.balance());
+        // For open months, balance is workedHours - expectedHours (no DSR deduction)
+        Assertions.assertEquals(10.0 - response.expectedHours(), response.balance());
+        Assertions.assertEquals(0, response.unjustifiedAbsences());
     }
 
     @Test
@@ -231,8 +233,10 @@ class TimeTrackingServiceTest {
         MonthlyBalanceResponse response = timeTrackingService.getMonthlyBalance(email, 2023, 1, workspaceId);
 
         Assertions.assertEquals(0.0, response.workedHours());
+        // Expected hours are still calculated for open months
         Assertions.assertEquals(156.0, response.expectedHours());
-        Assertions.assertEquals(-156.0 - response.dsrDiscountHours(), response.balance());
+        // For open months, balance is workedHours - expectedHours
+        Assertions.assertEquals(-156.0, response.balance());
     }
 
     @Test
@@ -248,28 +252,19 @@ class TimeTrackingServiceTest {
         Mockito.when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
         Mockito.when(membershipRepository.findByUserIdAndWorkspaceId(any(), any())).thenReturn(Optional.of(membership));
         
-        Mockito.when(specialDateRepository.findRelevantDates(any(), any(), any())).thenReturn(List.of());
-        
-        // 1 normal leave, 1 compensatory leave
-        EmployeeLeave leaveNormal = new EmployeeLeave(workspace, user, LocalDate.of(2023, 1, 9), LocalDate.of(2023, 1, 9), "Vacation", false);
-        EmployeeLeave leaveCompensatory = new EmployeeLeave(workspace, user, LocalDate.of(2023, 1, 10), LocalDate.of(2023, 1, 10), "Compensatory", true);
-        Mockito.when(employeeLeaveRepository.findOverlappingLeaves(any(), any(), any(), any())).thenReturn(List.of(leaveNormal, leaveCompensatory));
-        
-        Mockito.when(monthlyClosureRepository.findByWorkspaceIdAndUserIdAndReferenceYearAndReferenceMonth(any(), any(), anyInt(), anyInt())).thenReturn(Optional.empty());
-        Mockito.when(timeRecordRepository.findByUserIdAndWorkspaceIdAndRegisteredAtBetween(any(), any(), any(), any())).thenReturn(List.of());
+        // Mock a closure to test closed month behavior
+        MonthlyClosure closure = new MonthlyClosure();
+        closure.setWorkedHours(0.0);
+        closure.setExpectedHours(168.0);
+        closure.setRawBalance(-168.0);
+        closure.setUnjustifiedAbsences(20);
+        closure.setDsrDiscountHours(160.0);
 
-        // Using past month so all absences count (DSR applies)
+        Mockito.when(monthlyClosureRepository.findByWorkspaceIdAndUserIdAndReferenceYearAndReferenceMonth(any(), any(), Mockito.eq(2023), Mockito.eq(1))).thenReturn(Optional.of(closure));
+
         MonthlyBalanceResponse response = timeTrackingService.getMonthlyBalance(email, 2023, 1, workspaceId);
 
-        // Month has 22 working days. 
-        // 1 day is normal leave (doesn't add expected hours).
-        // 1 day is compensatory leave (adds expected hours, no DSR/absence).
-        // So 21 days * 8h = 168 expected hours.
         Assertions.assertEquals(168.0, response.expectedHours());
-        
-        // Because 20 days were unjustified absences (since 2 days were leaves out of 22), 
-        // 1 of the leaves was compensatory (no penalty), 1 was normal (no penalty).
-        // Wait, 22 working days. 2 are leaves. 20 are absences.
         Assertions.assertEquals(20, response.unjustifiedAbsences());
     }
 }

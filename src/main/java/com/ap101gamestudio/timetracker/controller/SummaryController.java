@@ -71,7 +71,7 @@ public class SummaryController {
             @CurrentWorkspaceId UUID workspaceId,
             Authentication authentication
     ) {
-        return ResponseEntity.ok(timeTrackingService.getMonthlyBalance(authentication.getName(), year, month, workspaceId));
+        return ResponseEntity.ok(summaryService.getMonthlyBalance(authentication.getName(), year, month, workspaceId));
     }
 
     @GetMapping("/employee/{employeeId}")

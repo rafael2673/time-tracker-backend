@@ -192,21 +192,28 @@ public class TimeTrackingService {
     }
 
     public MonthlyBalanceResponse getQuarterlyBalance(String email, int year, int quarter, UUID workspaceId) {
+        User user = userRepository.findByEmail(email).orElseThrow(() -> new DomainException("error.user.not_found"));
         int startMonth = (quarter - 1) * 3 + 1;
         int endMonth = startMonth + 2;
 
         double totalWorked = 0;
         double totalExpected = 0;
+        double totalBalance = 0;
+        int totalAbsences = 0;
+        double totalDsr = 0;
 
         for(int m = startMonth; m <= endMonth; m++) {
-            MonthlyBalanceResponse monthly = getMonthlyBalance(email, year, m, workspaceId);
-            totalWorked += monthly.workedHours();
-            totalExpected += monthly.expectedHours();
+            var closure = monthlyClosureRepository.findByWorkspaceIdAndUserIdAndReferenceYearAndReferenceMonth(workspaceId, user.getId(), year, m);
+            if (closure.isPresent()) {
+                totalWorked += closure.get().getWorkedHours();
+                totalExpected += closure.get().getExpectedHours();
+                totalBalance += closure.get().getRawBalance();
+                totalAbsences += closure.get().getUnjustifiedAbsences();
+                totalDsr += closure.get().getDsrDiscountHours();
+            }
         }
 
-        double finalBalance = roundHours(totalWorked - totalExpected);
-
-        return new MonthlyBalanceResponse(roundHours(totalWorked), roundHours(totalExpected), finalBalance, 0, 0.0);
+        return new MonthlyBalanceResponse(roundHours(totalWorked), roundHours(totalExpected), roundHours(totalBalance), totalAbsences, totalDsr);
     }
 
     public List<Integer> getAvailableYears(String email, UUID workspaceId) {
@@ -272,9 +279,11 @@ public class TimeTrackingService {
 
         double expectedHours = roundHours(metrics.expectedHours());
         double dsrPenalty = roundHours(metrics.dsrPenaltyHours());
-        double balance = roundHours(workedHours - expectedHours - dsrPenalty);
+        
+        // Dynamic balance for open month: only worked vs expected
+        double balance = roundHours(workedHours - expectedHours);
 
-        return new MonthlyBalanceResponse(workedHours, expectedHours, balance, metrics.absences(), dsrPenalty);
+        return new MonthlyBalanceResponse(workedHours, expectedHours, balance, 0, dsrPenalty);
     }
 
     private record PeriodData(List<SpecialDate> specialDates, List<EmployeeLeave> leaves, List<TimeRecord> records) {}
@@ -352,7 +361,7 @@ public class TimeTrackingService {
         if (records == null || records.isEmpty()) return 0.0;
 
         List<TimeRecord> modifiableRecords = records.stream()
-                .filter(r -> !r.isPendingApprovation())
+                .filter(r -> !r.isPendingApprovation() && !r.isRejected())
                 .sorted(Comparator.comparing(TimeRecord::getRegisteredAt))
                 .toList();
 
@@ -362,19 +371,18 @@ public class TimeTrackingService {
 
         for (TimeRecord record : modifiableRecords) {
             LocalDateTime time = record.getRegisteredAt();
-            currentStatus = switch (record.getRecordType().name()) {
+            switch (record.getRecordType().name()) {
                 case "ENTRY", "PAUSE_END" -> {
                     lastEntry = time;
-                    yield "WORKING";
+                    currentStatus = "WORKING";
                 }
                 case "PAUSE_START", "EXIT" -> {
                     if (lastEntry != null && "WORKING".equals(currentStatus)) {
                         totalSeconds += Duration.between(lastEntry, time).getSeconds();
                     }
-                    yield "PAUSED_OR_FINISHED";
+                    currentStatus = "PAUSED_OR_FINISHED";
                 }
-                default -> currentStatus;
-            };
+            }
         }
 
         if ("WORKING".equals(currentStatus) && lastEntry != null) {
@@ -455,14 +463,20 @@ public class TimeTrackingService {
         }
     }
 
+    private List<PendingRecordResponse> mapToPendingRecordResponses(Page<TimeRecord> result) {
+        return result.getContent().stream()
+                .map(r -> new PendingRecordResponse(
+                        r.getId(), r.getUser().getFullName(), r.getRecordType(), r.getRegisteredAt(), r.getJustification(), r.isRejected()
+                ))
+                .toList();
+    }
+
     public PageResponse<PendingRecordResponse> getPendingRecords(String email, UUID workspaceId, String search, int page, int size) {
         validateManagerAccess(email, workspaceId);
         Pageable pageable = PageRequest.of(page, size, Sort.by("registeredAt").descending());
         Page<TimeRecord> result = timeRecordRepository.findPendingWithSearch(workspaceId, search, pageable);
 
-        List<PendingRecordResponse> content = result.getContent().stream()
-                .map(r -> new PendingRecordResponse(r.getId(), r.getUser().getFullName(), r.getRecordType(), r.getRegisteredAt(), r.getJustification(), r.isRejected()))
-                .toList();
+        List<PendingRecordResponse> content = mapToPendingRecordResponses(result);
 
         return new PageResponse<>(content, result.getTotalPages(), result.getTotalElements(), result.getNumber());
     }
@@ -504,9 +518,7 @@ public class TimeTrackingService {
 
         Page<TimeRecord> result = timeRecordRepository.findHistoryWithFilters(workspaceId, search, parsed[0], parsed[1], parsed[2], finalStatus, pageable);
 
-        List<PendingRecordResponse> content = result.getContent().stream()
-                .map(r -> new PendingRecordResponse(r.getId(), r.getUser().getFullName(), r.getRecordType(), r.getRegisteredAt(), r.getJustification(), r.isRejected()))
-                .toList();
+        List<PendingRecordResponse> content = mapToPendingRecordResponses(result);
 
         return new PageResponse<>(content, result.getTotalPages(), result.getTotalElements(), result.getNumber());
     }
