@@ -12,6 +12,7 @@ import com.ap101gamestudio.timetracker.model.enums.SpecialDateType;
 import com.ap101gamestudio.timetracker.model.enums.UserRole;
 import com.ap101gamestudio.timetracker.repository.SpecialDateRepository;
 import com.ap101gamestudio.timetracker.repository.UserRepository;
+import com.ap101gamestudio.timetracker.repository.MonthlyClosureRepository;
 import com.ap101gamestudio.timetracker.repository.WorkspaceMembershipRepository;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -40,6 +41,10 @@ class SummaryServiceTest {
 
     @Mock
     private SpecialDateRepository specialDateRepository;
+
+    @Mock
+    @SuppressWarnings("unused")
+    private MonthlyClosureRepository monthlyClosureRepository;
 
     @Mock
     private TimeTrackingService timeTrackingService;

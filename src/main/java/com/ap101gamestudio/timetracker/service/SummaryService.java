@@ -8,6 +8,7 @@ import com.ap101gamestudio.timetracker.model.WorkspaceMembership;
 import com.ap101gamestudio.timetracker.model.enums.SpecialDateType;
 import com.ap101gamestudio.timetracker.model.enums.UserRole;
 import com.ap101gamestudio.timetracker.repository.SpecialDateRepository;
+import com.ap101gamestudio.timetracker.repository.MonthlyClosureRepository;
 import com.ap101gamestudio.timetracker.repository.UserRepository;
 import com.ap101gamestudio.timetracker.repository.WorkspaceMembershipRepository;
 import org.springframework.stereotype.Service;
@@ -29,17 +30,20 @@ public class SummaryService {
     private final WorkspaceMembershipRepository membershipRepository;
     private final TimeTrackingService timeTrackingService;
     private final SpecialDateRepository specialDateRepository;
+    private final MonthlyClosureRepository monthlyClosureRepository;
     private final HrRuleService hrRuleService;
 
     public SummaryService(UserRepository userRepository,
                           WorkspaceMembershipRepository membershipRepository,
                           TimeTrackingService timeTrackingService,
                           SpecialDateRepository specialDateRepository,
+                          MonthlyClosureRepository monthlyClosureRepository,
                           HrRuleService hrRuleService) {
         this.userRepository = userRepository;
         this.membershipRepository = membershipRepository;
         this.timeTrackingService = timeTrackingService;
         this.specialDateRepository = specialDateRepository;
+        this.monthlyClosureRepository = monthlyClosureRepository;
         this.hrRuleService = hrRuleService;
     }
 
@@ -49,16 +53,18 @@ public class SummaryService {
         User employee = buscarUsuarioPorId(employeeId);
         validarVinculoComWorkspace(employee.getId(), workspaceId);
 
-        YearMonth now = YearMonth.now();
-        int currentQuarter = calcularTrimestreAtual(now);
+        YearMonth referencePeriod = resolveDashboardReferencePeriod(workspaceId);
+        int referenceQuarter = calcularTrimestreAtual(referencePeriod);
 
         MonthlyBalanceResponse quarterlyBalance = timeTrackingService.getQuarterlyBalance(
-                employee.getEmail(), now.getYear(), currentQuarter, workspaceId
+                employee.getEmail(), referencePeriod.getYear(), referenceQuarter, workspaceId
         );
 
         MonthlyBalanceResponse monthlyBalance = timeTrackingService.getMonthlyBalance(
-                employee.getEmail(), now.getYear(), now.getMonthValue(), workspaceId
+                employee.getEmail(), referencePeriod.getYear(), referencePeriod.getMonthValue(), workspaceId
         );
+
+        YearMonth now = YearMonth.now();
 
         VacationRightResponse vacationRight = hrRuleService.calculateVacationRights(
                 workspaceId, employeeId, now.getYear()
@@ -242,13 +248,13 @@ public class SummaryService {
 
     public LaborRiskRankingResponse getLaborRiskRanking(UUID workspaceId) {
         List<WorkspaceMembership> members = buscarMembrosAtivos(workspaceId);
-        YearMonth now = YearMonth.now();
-        int currentQuarter = calcularTrimestreAtual(now);
+        YearMonth referencePeriod = resolveDashboardReferencePeriod(workspaceId);
+        int referenceQuarter = calcularTrimestreAtual(referencePeriod);
 
         List<EmployeeBalanceDTO> allBalances = members.stream()
                 .map(member -> {
                     MonthlyBalanceResponse balance = timeTrackingService.getQuarterlyBalance(
-                            member.getUser().getEmail(), now.getYear(), currentQuarter, workspaceId
+                            member.getUser().getEmail(), referencePeriod.getYear(), referenceQuarter, workspaceId
                     );
                     return new EmployeeBalanceDTO(
                             member.getUser().getId(),
@@ -271,6 +277,17 @@ public class SummaryService {
                 .toList();
 
         return new LaborRiskRankingResponse(topPositive, topNegative);
+    }
+
+    private YearMonth resolveDashboardReferencePeriod(UUID workspaceId) {
+        YearMonth current = YearMonth.now();
+        boolean currentMonthIsClosed = monthlyClosureRepository.existsByWorkspaceIdAndReferenceYearAndReferenceMonth(
+                workspaceId,
+                current.getYear(),
+                current.getMonthValue()
+        );
+
+        return currentMonthIsClosed ? current : current.minusMonths(1);
     }
 
     private TimeDistributionResponse createTimeDistributionResponse(double totalExpected, double totalWorked, double totalOvertime, double totalAbsence) {
