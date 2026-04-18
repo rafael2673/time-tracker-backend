@@ -45,4 +45,14 @@ public class EmployeeLeaveController {
         leaveService.delete(authentication.getName(), workspaceId, leaveId);
         return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/collective-compensatory")
+    public ResponseEntity<Void> createCollectiveCompensatoryLeave(
+            Authentication authentication,
+            @PathVariable UUID workspaceId,
+            @RequestBody @Valid com.ap101gamestudio.timetracker.dto.CollectiveCompensatoryLeaveRequest request
+    ) {
+        leaveService.createCollectiveCompensatoryLeave(authentication.getName(), workspaceId, request);
+        return ResponseEntity.ok().build();
+    }
 }

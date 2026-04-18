@@ -116,4 +116,20 @@ public class SummaryController {
     ) {
         return ResponseEntity.ok(summaryService.getCompanyYearlyAverage(workspaceId, year, policyId, locale));
     }
+
+    @GetMapping("/company/labor-risk")
+    public ResponseEntity<com.ap101gamestudio.timetracker.dto.LaborRiskRankingResponse> getLaborRiskRanking(
+            @CurrentWorkspaceId UUID workspaceId
+    ) {
+        return ResponseEntity.ok(summaryService.getLaborRiskRanking(workspaceId));
+    }
+
+    @GetMapping("/company/time-distribution")
+    public ResponseEntity<com.ap101gamestudio.timetracker.dto.TimeDistributionResponse> getTimeDistribution(
+            @CurrentWorkspaceId UUID workspaceId,
+            @RequestParam int year,
+            @RequestParam int month
+    ) {
+        return ResponseEntity.ok(summaryService.getTimeDistribution(workspaceId, year, month));
+    }
 }

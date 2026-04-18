@@ -1,10 +1,30 @@
 package com.ap101gamestudio.timetracker.service;
 
-import com.ap101gamestudio.timetracker.dto.*;
+import com.ap101gamestudio.timetracker.dto.CreateTimeRecordRequest;
+import com.ap101gamestudio.timetracker.dto.DailySummaryResponse;
+import com.ap101gamestudio.timetracker.dto.MonthSummaryResponse;
+import com.ap101gamestudio.timetracker.dto.MonthlyBalanceResponse;
+import com.ap101gamestudio.timetracker.dto.PageResponse;
+import com.ap101gamestudio.timetracker.dto.PendingRecordResponse;
+import com.ap101gamestudio.timetracker.dto.TimeRecordResponse;
+import com.ap101gamestudio.timetracker.dto.UpdateTimeRecordRequest;
 import com.ap101gamestudio.timetracker.exceptions.DomainException;
-import com.ap101gamestudio.timetracker.model.*;
+import com.ap101gamestudio.timetracker.model.EmployeeLeave;
+import com.ap101gamestudio.timetracker.model.SpecialDate;
+import com.ap101gamestudio.timetracker.model.TimeRecord;
+import com.ap101gamestudio.timetracker.model.User;
+import com.ap101gamestudio.timetracker.model.WorkPolicy;
+import com.ap101gamestudio.timetracker.model.Workspace;
+import com.ap101gamestudio.timetracker.model.WorkspaceMembership;
 import com.ap101gamestudio.timetracker.model.enums.RecordSource;
-import com.ap101gamestudio.timetracker.repository.*;
+import com.ap101gamestudio.timetracker.model.enums.UserRole;
+import com.ap101gamestudio.timetracker.repository.EmployeeLeaveRepository;
+import com.ap101gamestudio.timetracker.repository.MonthlyClosureRepository;
+import com.ap101gamestudio.timetracker.repository.SpecialDateRepository;
+import com.ap101gamestudio.timetracker.repository.TimeRecordRepository;
+import com.ap101gamestudio.timetracker.repository.UserRepository;
+import com.ap101gamestudio.timetracker.repository.WorkspaceMembershipRepository;
+import com.ap101gamestudio.timetracker.repository.WorkspaceRepository;
 import com.ap101gamestudio.timetracker.utils.DateFilterUtils;
 import org.springframework.context.MessageSource;
 import org.springframework.data.domain.Page;
@@ -21,7 +41,13 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -278,8 +304,11 @@ public class TimeTrackingService {
             LocalDate day = yearMonth.atDay(i);
             if (day.isAfter(lastDayToCount)) continue;
 
-            boolean isLeave = periodData.leaves().stream().anyMatch(l -> !day.isBefore(l.getStartDate()) && !day.isAfter(l.getEndDate()));
-            if (isLeave) continue;
+            Optional<EmployeeLeave> leaveOpt = periodData.leaves().stream().filter(l -> !day.isBefore(l.getStartDate()) && !day.isAfter(l.getEndDate())).findFirst();
+            if (leaveOpt.isPresent() && !leaveOpt.get().isDeductFromBalance()) {
+                continue;
+            }
+            boolean isDeductLeave = leaveOpt.isPresent();
 
             if (workingDays.contains(day.getDayOfWeek())) {
                 SpecialDate specialDate = findMatchingSpecialDate(periodData.specialDates(), day);
@@ -288,7 +317,7 @@ public class TimeTrackingService {
                 } else {
                     expectedHours += dailyHours;
                     List<TimeRecord> dailyRecords = recordsByDay.getOrDefault(day, List.of());
-                    if (dailyRecords.isEmpty() && day.isBefore(today)) {
+                    if (dailyRecords.isEmpty() && day.isBefore(today) && !isDeductLeave) {
                         absences++;
                         dsrPenaltyHours += dailyHours;
                     }
@@ -421,15 +450,15 @@ public class TimeTrackingService {
         User user = userRepository.findByEmail(email).orElseThrow(() -> new DomainException("error.user.not_found"));
         WorkspaceMembership membership = membershipRepository.findByUserIdAndWorkspaceId(user.getId(), workspaceId)
                 .orElseThrow(() -> new DomainException("error.permission.denied"));
-        if (membership.getRole() == com.ap101gamestudio.timetracker.model.enums.UserRole.EMPLOYEE) {
+        if (membership.getRole() == UserRole.EMPLOYEE) {
             throw new DomainException("error.permission.denied");
         }
     }
 
     public PageResponse<PendingRecordResponse> getPendingRecords(String email, UUID workspaceId, String search, int page, int size) {
         validateManagerAccess(email, workspaceId);
-        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size, org.springframework.data.domain.Sort.by("registeredAt").descending());
-        org.springframework.data.domain.Page<TimeRecord> result = timeRecordRepository.findPendingWithSearch(workspaceId, search, pageable);
+        Pageable pageable = PageRequest.of(page, size, Sort.by("registeredAt").descending());
+        Page<TimeRecord> result = timeRecordRepository.findPendingWithSearch(workspaceId, search, pageable);
 
         List<PendingRecordResponse> content = result.getContent().stream()
                 .map(r -> new PendingRecordResponse(r.getId(), r.getUser().getFullName(), r.getRecordType(), r.getRegisteredAt(), r.getJustification(), r.isRejected()))

@@ -62,6 +62,15 @@ public class WorkspaceController {
         return ResponseEntity.noContent().build();
     }
 
+    @PutMapping("/{workspaceId}")
+    public ResponseEntity<WorkspaceResponse> updateLocation(
+            @PathVariable UUID workspaceId,
+            @RequestBody @Valid WorkspaceLocationRequest request,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(workspaceService.updateLocation(workspaceId, request, authentication.getName()));
+    }
+
     @PutMapping("/{workspaceId}/auto-closure")
     public ResponseEntity<WorkspaceResponse> updateAutoClosureSettings(
             @PathVariable UUID workspaceId,

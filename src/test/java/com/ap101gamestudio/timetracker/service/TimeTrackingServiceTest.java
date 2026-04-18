@@ -233,4 +233,42 @@ class TimeTrackingServiceTest {
         Assertions.assertEquals(156.0, response.expectedHours());
         Assertions.assertEquals(-156.0 - response.dsrDiscountHours(), response.balance());
     }
+
+    @Test
+    void shouldHandleCompensatoryLeaveCorrectly() {
+        String email = "rafael@email.com";
+        UUID workspaceId = UUID.randomUUID();
+        User user = new User(email, "pass", "Rafa");
+        ReflectionTestUtils.setField(user, "id", UUID.randomUUID());
+        Workspace workspace = new Workspace("Office", -5.0, -35.0, 100);
+        WorkPolicy policy = new WorkPolicy(workspace, "Padrão", 480, 10, "MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY");
+        WorkspaceMembership membership = new WorkspaceMembership(user, workspace, UserRole.EMPLOYEE, policy);
+
+        Mockito.when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
+        Mockito.when(membershipRepository.findByUserIdAndWorkspaceId(any(), any())).thenReturn(Optional.of(membership));
+        
+        Mockito.when(specialDateRepository.findRelevantDates(any(), any(), any())).thenReturn(List.of());
+        
+        // 1 normal leave, 1 compensatory leave
+        EmployeeLeave leaveNormal = new EmployeeLeave(workspace, user, LocalDate.of(2023, 1, 9), LocalDate.of(2023, 1, 9), "Vacation", false);
+        EmployeeLeave leaveCompensatory = new EmployeeLeave(workspace, user, LocalDate.of(2023, 1, 10), LocalDate.of(2023, 1, 10), "Compensatory", true);
+        Mockito.when(employeeLeaveRepository.findOverlappingLeaves(any(), any(), any(), any())).thenReturn(List.of(leaveNormal, leaveCompensatory));
+        
+        Mockito.when(monthlyClosureRepository.findByWorkspaceIdAndUserIdAndReferenceYearAndReferenceMonth(any(), any(), anyInt(), anyInt())).thenReturn(Optional.empty());
+        Mockito.when(timeRecordRepository.findByUserIdAndWorkspaceIdAndRegisteredAtBetween(any(), any(), any(), any())).thenReturn(List.of());
+
+        // Using past month so all absences count (DSR applies)
+        MonthlyBalanceResponse response = timeTrackingService.getMonthlyBalance(email, 2023, 1, workspaceId);
+
+        // Month has 22 working days. 
+        // 1 day is normal leave (doesn't add expected hours).
+        // 1 day is compensatory leave (adds expected hours, no DSR/absence).
+        // So 21 days * 8h = 168 expected hours.
+        Assertions.assertEquals(168.0, response.expectedHours());
+        
+        // Because 20 days were unjustified absences (since 2 days were leaves out of 22), 
+        // 1 of the leaves was compensatory (no penalty), 1 was normal (no penalty).
+        // Wait, 22 working days. 2 are leaves. 20 are absences.
+        Assertions.assertEquals(20, response.unjustifiedAbsences());
+    }
 }

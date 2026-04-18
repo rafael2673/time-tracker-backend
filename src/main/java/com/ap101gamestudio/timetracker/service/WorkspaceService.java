@@ -172,6 +172,20 @@ public class WorkspaceService {
     }
 
     @Transactional
+    public WorkspaceResponse updateLocation(UUID workspaceId, WorkspaceLocationRequest request, String email) {
+        WorkspaceMembership workspaceMembership = validateManagerOrAdmin(email, workspaceId);
+        Workspace workspace = workspaceRepository.findById(workspaceId)
+                .orElseThrow(() -> new DomainException("error.workspace.not_found"));
+
+        workspace.setName(request.name());
+        workspace.setStateUf(request.stateUf());
+        workspace.setIbgeCode(request.ibgeCode());
+
+        Workspace updatedWorkspace = workspaceRepository.save(workspace);
+        return mapToResponse(updatedWorkspace, workspaceMembership);
+    }
+
+    @Transactional
     public WorkspaceResponse updateAutoClosureSettings(UUID workspaceId, UpdateAutoClosureRequest request, String email) {
         WorkspaceMembership workspaceMembership = validateManagerOrAdmin(email, workspaceId);
         Workspace workspace = workspaceRepository.findById(workspaceId)

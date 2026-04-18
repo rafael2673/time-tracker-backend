@@ -33,6 +33,9 @@ public class EmployeeLeave {
     @Column(nullable = false)
     private String reason;
 
+    @Column(name = "deduct_from_balance", nullable = false)
+    private boolean deductFromBalance = false;
+
     protected EmployeeLeave() {}
 
     public EmployeeLeave(Workspace workspace, User user, LocalDate startDate, LocalDate endDate, String reason) {
@@ -41,5 +44,15 @@ public class EmployeeLeave {
         this.startDate = startDate;
         this.endDate = endDate;
         this.reason = reason;
+        this.deductFromBalance = false;
+    }
+
+    public EmployeeLeave(Workspace workspace, User user, LocalDate startDate, LocalDate endDate, String reason, boolean deductFromBalance) {
+        this.workspace = workspace;
+        this.user = user;
+        this.startDate = startDate;
+        this.endDate = endDate;
+        this.reason = reason;
+        this.deductFromBalance = deductFromBalance;
     }
 }

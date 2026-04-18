@@ -188,4 +188,71 @@ public class SummaryService {
 
         return summary;
     }
+
+    public LaborRiskRankingResponse getLaborRiskRanking(UUID workspaceId) {
+        List<WorkspaceMembership> members = buscarMembrosAtivos(workspaceId);
+        YearMonth now = YearMonth.now();
+        int currentQuarter = calcularTrimestreAtual(now);
+
+        List<EmployeeBalanceDTO> allBalances = members.stream()
+                .map(member -> {
+                    MonthlyBalanceResponse balance = timeTrackingService.getQuarterlyBalance(
+                            member.getUser().getEmail(), now.getYear(), currentQuarter, workspaceId
+                    );
+                    return new EmployeeBalanceDTO(
+                            member.getUser().getId(),
+                            member.getUser().getFullName(),
+                            balance.balance()
+                    );
+                })
+                .toList();
+
+        List<EmployeeBalanceDTO> topPositive = allBalances.stream()
+                .filter(b -> b.balance() > 0)
+                .sorted(Comparator.comparing(EmployeeBalanceDTO::balance).reversed())
+                .limit(5)
+                .toList();
+
+        List<EmployeeBalanceDTO> topNegative = allBalances.stream()
+                .filter(b -> b.balance() < 0)
+                .sorted(Comparator.comparing(EmployeeBalanceDTO::balance))
+                .limit(5)
+                .toList();
+
+        return new LaborRiskRankingResponse(topPositive, topNegative);
+    }
+
+    public TimeDistributionResponse getTimeDistribution(UUID workspaceId, int year, int month) {
+        List<WorkspaceMembership> members = buscarMembrosAtivos(workspaceId);
+
+        double totalExpected = 0.0;
+        double totalWorked = 0.0;
+        double totalOvertime = 0.0;
+        double totalAbsence = 0.0;
+
+        for (WorkspaceMembership member : members) {
+            MonthlyBalanceResponse balance = timeTrackingService.getMonthlyBalance(
+                    member.getUser().getEmail(), year, month, workspaceId
+            );
+
+            totalExpected += balance.expectedHours();
+            totalWorked += balance.workedHours();
+
+            if (balance.balance() > 0) {
+                totalOvertime += balance.balance();
+            } else if (balance.balance() < 0) {
+                totalAbsence += Math.abs(balance.balance());
+            }
+        }
+
+        double regularHours = totalWorked - totalOvertime;
+        if (regularHours < 0) regularHours = 0;
+
+        return new TimeDistributionResponse(
+                Math.round(regularHours * 100.0) / 100.0,
+                Math.round(totalOvertime * 100.0) / 100.0,
+                Math.round(totalAbsence * 100.0) / 100.0,
+                Math.round(totalExpected * 100.0) / 100.0
+        );
+    }
 }

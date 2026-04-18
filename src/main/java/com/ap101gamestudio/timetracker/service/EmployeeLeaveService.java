@@ -2,12 +2,14 @@ package com.ap101gamestudio.timetracker.service;
 
 import com.ap101gamestudio.timetracker.dto.EmployeeLeaveRequest;
 import com.ap101gamestudio.timetracker.dto.EmployeeLeaveResponse;
+import com.ap101gamestudio.timetracker.dto.MonthlyBalanceResponse;
 import com.ap101gamestudio.timetracker.exceptions.DomainException;
 import com.ap101gamestudio.timetracker.model.*;
 import com.ap101gamestudio.timetracker.model.enums.UserRole;
 import com.ap101gamestudio.timetracker.repository.*;
 import org.springframework.stereotype.Service;
 
+import java.time.YearMonth;
 import java.util.List;
 import java.util.UUID;
 
@@ -17,12 +19,14 @@ public class EmployeeLeaveService {
     private final UserRepository userRepository;
     private final WorkspaceRepository workspaceRepository;
     private final WorkspaceMembershipRepository membershipRepository;
+    private final TimeTrackingService timeTrackingService;
 
-    public EmployeeLeaveService(EmployeeLeaveRepository leaveRepository, UserRepository userRepository, WorkspaceRepository workspaceRepository, WorkspaceMembershipRepository membershipRepository) {
+    public EmployeeLeaveService(EmployeeLeaveRepository leaveRepository, UserRepository userRepository, WorkspaceRepository workspaceRepository, WorkspaceMembershipRepository membershipRepository, TimeTrackingService timeTrackingService) {
         this.leaveRepository = leaveRepository;
         this.userRepository = userRepository;
         this.workspaceRepository = workspaceRepository;
         this.membershipRepository = membershipRepository;
+        this.timeTrackingService = timeTrackingService;
     }
 
     private void validateManagerAccess(String email, UUID workspaceId) {
@@ -69,5 +73,26 @@ public class EmployeeLeaveService {
         EmployeeLeave leave = leaveRepository.findById(leaveId).orElseThrow(() -> new DomainException("error.record.not_found"));
         if (!leave.getWorkspace().getId().equals(workspaceId)) throw new DomainException("error.permission.denied");
         leaveRepository.delete(leave);
+    }
+
+    public void createCollectiveCompensatoryLeave(String email, UUID workspaceId, com.ap101gamestudio.timetracker.dto.CollectiveCompensatoryLeaveRequest request) {
+        validateManagerAccess(email, workspaceId);
+        Workspace workspace = workspaceRepository.findById(workspaceId).orElseThrow(() -> new DomainException("error.workspace.not_found"));
+
+        List<WorkspaceMembership> members = membershipRepository.findByWorkspaceId(workspaceId).stream().filter(WorkspaceMembership::isActive).toList();
+        YearMonth now = YearMonth.now();
+        int currentQuarter = (now.getMonthValue() - 1) / 3 + 1;
+
+        for (WorkspaceMembership member : members) {
+            MonthlyBalanceResponse balance = timeTrackingService.getQuarterlyBalance(
+                    member.getUser().getEmail(), now.getYear(), currentQuarter, workspaceId
+            );
+            
+            // Apply only to employees with >= 8h in balance
+            if (balance.balance() >= 8.0) {
+                EmployeeLeave leave = new EmployeeLeave(workspace, member.getUser(), request.date(), request.date(), request.reason(), true);
+                leaveRepository.save(leave);
+            }
+        }
     }
 }
