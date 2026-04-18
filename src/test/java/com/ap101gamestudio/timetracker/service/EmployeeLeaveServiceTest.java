@@ -51,7 +51,7 @@ class EmployeeLeaveServiceTest {
     private EmployeeLeaveService employeeLeaveService;
 
     @Test
-    void shouldCreateCollectiveCompensatoryLeaveOnlyForPositiveBank() {
+    void shouldCreateCollectiveCompensatoryLeaveOnlyForEmployeesWithMinimumBalance() {
         String adminEmail = "admin@email.com";
         UUID workspaceId = UUID.randomUUID();
 
@@ -79,12 +79,12 @@ class EmployeeLeaveServiceTest {
         Mockito.when(membershipRepository.findByWorkspaceId(workspaceId)).thenReturn(List.of(positiveMembership, negativeMembership));
 
         Mockito.when(timeTrackingService.getQuarterlyBalance(Mockito.eq("positive@email.com"), anyInt(), anyInt(), Mockito.eq(workspaceId)))
-                .thenReturn(new MonthlyBalanceResponse(100.0, 90.0, 10.0, 0, 0.0));
+                .thenReturn(new MonthlyBalanceResponse(100.0, 92.0, 8.0, 0, 0.0));
 
         Mockito.when(timeTrackingService.getQuarterlyBalance(Mockito.eq("negative@email.com"), anyInt(), anyInt(), Mockito.eq(workspaceId)))
                 .thenReturn(new MonthlyBalanceResponse(100.0, 105.0, -5.0, 0, 0.0));
 
-        CollectiveCompensatoryLeaveRequest request = new CollectiveCompensatoryLeaveRequest(LocalDate.now(), "Folga");
+        CollectiveCompensatoryLeaveRequest request = new CollectiveCompensatoryLeaveRequest(LocalDate.now(), "Folga", true);
 
         employeeLeaveService.createCollectiveCompensatoryLeave(adminEmail, workspaceId, request);
 
@@ -109,7 +109,7 @@ class EmployeeLeaveServiceTest {
         Mockito.when(userRepository.findByEmail(email)).thenReturn(Optional.of(empUser));
         Mockito.when(membershipRepository.findByUserIdAndWorkspaceId(empUser.getId(), workspaceId)).thenReturn(Optional.of(empMembership));
 
-        CollectiveCompensatoryLeaveRequest request = new CollectiveCompensatoryLeaveRequest(LocalDate.now(), "Folga");
+        CollectiveCompensatoryLeaveRequest request = new CollectiveCompensatoryLeaveRequest(LocalDate.now(), "Folga", true);
 
         Assertions.assertThrows(DomainException.class, () -> 
             employeeLeaveService.createCollectiveCompensatoryLeave(email, workspaceId, request)

@@ -95,9 +95,11 @@ public class SummaryController {
 
     @GetMapping("/next-holiday")
     public ResponseEntity<NextHolidayResponse> getNextHoliday(
-            @CurrentWorkspaceId UUID workspaceId
+            @CurrentWorkspaceId UUID workspaceId,
+            @RequestParam(required = false) UUID employeeId,
+            org.springframework.security.core.Authentication authentication
     ) {
-        return ResponseEntity.ok(summaryService.getNextSpecialDate(workspaceId));
+        return ResponseEntity.ok(summaryService.getNextSpecialDate(workspaceId, employeeId, authentication.getName()));
     }
 
     @GetMapping("/employee/{employeeId}/time-distribution")

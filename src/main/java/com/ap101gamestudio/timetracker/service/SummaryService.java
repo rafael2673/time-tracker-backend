@@ -5,6 +5,7 @@ import com.ap101gamestudio.timetracker.exceptions.DomainException;
 import com.ap101gamestudio.timetracker.model.SpecialDate;
 import com.ap101gamestudio.timetracker.model.User;
 import com.ap101gamestudio.timetracker.model.WorkspaceMembership;
+import com.ap101gamestudio.timetracker.model.enums.SpecialDateType;
 import com.ap101gamestudio.timetracker.model.enums.UserRole;
 import com.ap101gamestudio.timetracker.repository.SpecialDateRepository;
 import com.ap101gamestudio.timetracker.repository.UserRepository;
@@ -22,6 +23,7 @@ import java.util.UUID;
 public class SummaryService {
 
     private static final int DIAS_UTEIS_MEDIOS_POR_MES = 22;
+    private static final double MIN_COMPENSATORY_BALANCE_HOURS = 8.0;
 
     private final UserRepository userRepository;
     private final WorkspaceMembershipRepository membershipRepository;
@@ -75,14 +77,48 @@ public class SummaryService {
         );
     }
 
-    public NextHolidayResponse getNextSpecialDate(UUID workspaceId) {
+    public NextHolidayResponse getNextSpecialDate(UUID workspaceId, UUID employeeId, String authenticatedEmail) {
         LocalDate today = LocalDate.now();
+        
+        UUID targetEmployeeId = employeeId;
+        if (targetEmployeeId == null) {
+            targetEmployeeId = userRepository.findByEmail(authenticatedEmail)
+                    .map(User::getId)
+                    .orElse(null);
+        }
+
+        final UUID finalEmployeeId = targetEmployeeId;
 
         return specialDateRepository.findByWorkspaceId(workspaceId).stream()
+                .filter(sd -> isEligibleForSpecialDate(sd, workspaceId, finalEmployeeId))
                 .map(sd -> mapearParaProximaOcorrencia(sd, today))
                 .filter(Objects::nonNull)
                 .min(Comparator.comparing(NextHolidayResponse::date))
                 .orElse(null);
+    }
+
+    private boolean isEligibleForSpecialDate(SpecialDate sd, UUID workspaceId, UUID employeeId) {
+        if (sd.getType() != SpecialDateType.COMPENSATORY_COLLECTIVE) {
+            return true;
+        }
+
+        if (employeeId == null) {
+            return false;
+        }
+
+        User employee = userRepository.findById(employeeId).orElse(null);
+        if (employee == null) {
+            return false;
+        }
+
+        YearMonth now = YearMonth.now();
+        int currentQuarter = calcularTrimestreAtual(now);
+
+        MonthlyBalanceResponse balance = timeTrackingService.getQuarterlyBalance(
+                employee.getEmail(), now.getYear(), currentQuarter, workspaceId
+        );
+
+        return balance.balance() >= MIN_COMPENSATORY_BALANCE_HOURS;
     }
 
     public AbsencePieChartResponse getCompanyAbsences(UUID workspaceId, int year, int month) {
@@ -237,6 +273,17 @@ public class SummaryService {
         return new LaborRiskRankingResponse(topPositive, topNegative);
     }
 
+    private TimeDistributionResponse createTimeDistributionResponse(double totalExpected, double totalWorked, double totalOvertime, double totalAbsence) {
+        double regularHours = Math.max(0, totalWorked - totalOvertime);
+        
+        return new TimeDistributionResponse(
+                Math.round(regularHours * 100.0) / 100.0,
+                Math.round(totalOvertime * 100.0) / 100.0,
+                Math.round(totalAbsence * 100.0) / 100.0,
+                Math.round(totalExpected * 100.0) / 100.0
+        );
+    }
+
     public TimeDistributionResponse getTimeDistribution(UUID workspaceId, int year, int month) {
         List<WorkspaceMembership> members = buscarMembrosAtivos(workspaceId);
 
@@ -260,15 +307,7 @@ public class SummaryService {
             }
         }
 
-        double regularHours = totalWorked - totalOvertime;
-        if (regularHours < 0) regularHours = 0;
-
-        return new TimeDistributionResponse(
-                Math.round(regularHours * 100.0) / 100.0,
-                Math.round(totalOvertime * 100.0) / 100.0,
-                Math.round(totalAbsence * 100.0) / 100.0,
-                Math.round(totalExpected * 100.0) / 100.0
-        );
+        return createTimeDistributionResponse(totalExpected, totalWorked, totalOvertime, totalAbsence);
     }
 
     public TimeDistributionResponse getEmployeeTimeDistribution(String authenticatedEmail, UUID employeeId, UUID workspaceId, int year, int month) {
@@ -286,14 +325,6 @@ public class SummaryService {
         double overtime = Math.max(0, balance.balance());
         double absence = Math.max(0, -balance.balance());
 
-        double regularHours = totalWorked - overtime;
-        if (regularHours < 0) regularHours = 0;
-
-        return new TimeDistributionResponse(
-                Math.round(regularHours * 100.0) / 100.0,
-                Math.round(overtime * 100.0) / 100.0,
-                Math.round(absence * 100.0) / 100.0,
-                Math.round(totalExpected * 100.0) / 100.0
-        );
+        return createTimeDistributionResponse(totalExpected, totalWorked, overtime, absence);
     }
 }

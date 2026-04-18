@@ -35,7 +35,7 @@ public class SpecialDate {
     private boolean isRecurring;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "type", nullable = false)
+    @Column(name = "type", nullable = false, length = 50)
     private SpecialDateType type = SpecialDateType.CUSTOM;
 
     public SpecialDate() {

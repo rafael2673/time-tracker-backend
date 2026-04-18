@@ -15,6 +15,8 @@ import java.util.UUID;
 
 @Service
 public class EmployeeLeaveService {
+    private static final double MIN_COMPENSATORY_BALANCE_HOURS = 8.0;
+
     private final EmployeeLeaveRepository leaveRepository;
     private final UserRepository userRepository;
     private final WorkspaceRepository workspaceRepository;
@@ -88,7 +90,7 @@ public class EmployeeLeaveService {
                 MonthlyBalanceResponse balance = timeTrackingService.getQuarterlyBalance(
                         member.getUser().getEmail(), now.getYear(), currentQuarter, workspaceId
                 );
-                if (balance.balance() < 8.0) continue;
+                if (balance.balance() < MIN_COMPENSATORY_BALANCE_HOURS) continue;
             }
 
             EmployeeLeave leave = new EmployeeLeave(workspace, member.getUser(), request.date(), request.date(), request.reason(), true);

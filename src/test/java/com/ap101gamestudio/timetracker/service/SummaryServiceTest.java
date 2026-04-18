@@ -2,11 +2,16 @@ package com.ap101gamestudio.timetracker.service;
 
 import com.ap101gamestudio.timetracker.dto.LaborRiskRankingResponse;
 import com.ap101gamestudio.timetracker.dto.MonthlyBalanceResponse;
+import com.ap101gamestudio.timetracker.dto.NextHolidayResponse;
 import com.ap101gamestudio.timetracker.dto.TimeDistributionResponse;
+import com.ap101gamestudio.timetracker.model.SpecialDate;
 import com.ap101gamestudio.timetracker.model.User;
 import com.ap101gamestudio.timetracker.model.Workspace;
 import com.ap101gamestudio.timetracker.model.WorkspaceMembership;
+import com.ap101gamestudio.timetracker.model.enums.SpecialDateType;
 import com.ap101gamestudio.timetracker.model.enums.UserRole;
+import com.ap101gamestudio.timetracker.repository.SpecialDateRepository;
+import com.ap101gamestudio.timetracker.repository.UserRepository;
 import com.ap101gamestudio.timetracker.repository.WorkspaceMembershipRepository;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -17,7 +22,9 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -26,7 +33,13 @@ import static org.mockito.ArgumentMatchers.anyInt;
 class SummaryServiceTest {
 
     @Mock
+    private UserRepository userRepository;
+
+    @Mock
     private WorkspaceMembershipRepository membershipRepository;
+
+    @Mock
+    private SpecialDateRepository specialDateRepository;
 
     @Mock
     private TimeTrackingService timeTrackingService;
@@ -103,6 +116,90 @@ class SummaryServiceTest {
         Assertions.assertEquals(20.0, response.overtimeHours());
         Assertions.assertEquals(10.0, response.absenceHours());
         Assertions.assertEquals(320.0, response.totalExpectedHours());
+    }
+
+    @Test
+    void shouldIgnoreCompensatoryCollectiveWhenEmployeeHasInsufficientBalance() {
+        UUID workspaceId = UUID.randomUUID();
+        UUID employeeId = UUID.randomUUID();
+        LocalDate tomorrow = LocalDate.now().plusDays(1);
+        LocalDate dayAfterTomorrow = LocalDate.now().plusDays(2);
+
+        User employee = new User("employee@email.com", "pass", "Employee");
+        ReflectionTestUtils.setField(employee, "id", employeeId);
+
+        Workspace workspace = new Workspace("Office", 0.0, 0.0, 10);
+
+        SpecialDate compensatoryCollective = new SpecialDate(
+                workspace,
+                tomorrow,
+                "Folga coletiva",
+                0.0,
+                false,
+                SpecialDateType.COMPENSATORY_COLLECTIVE
+        );
+
+        SpecialDate nationalHoliday = new SpecialDate(
+                workspace,
+                dayAfterTomorrow,
+                "Feriado nacional",
+                0.0,
+                false,
+                SpecialDateType.NATIONAL
+        );
+
+        Mockito.when(userRepository.findById(employeeId)).thenReturn(Optional.of(employee));
+        Mockito.when(specialDateRepository.findByWorkspaceId(workspaceId)).thenReturn(List.of(compensatoryCollective, nationalHoliday));
+        Mockito.when(timeTrackingService.getQuarterlyBalance(Mockito.eq(employee.getEmail()), anyInt(), anyInt(), Mockito.eq(workspaceId)))
+                .thenReturn(new MonthlyBalanceResponse(0.0, 0.0, 7.5, 0, 0.0));
+
+        NextHolidayResponse response = summaryService.getNextSpecialDate(workspaceId, employeeId, employee.getEmail());
+
+        Assertions.assertNotNull(response);
+        Assertions.assertEquals("Feriado nacional", response.name());
+        Assertions.assertEquals(dayAfterTomorrow, response.date());
+    }
+
+    @Test
+    void shouldReturnCompensatoryCollectiveWhenEmployeeHasEnoughBalance() {
+        UUID workspaceId = UUID.randomUUID();
+        UUID employeeId = UUID.randomUUID();
+        LocalDate tomorrow = LocalDate.now().plusDays(1);
+        LocalDate dayAfterTomorrow = LocalDate.now().plusDays(2);
+
+        User employee = new User("employee@email.com", "pass", "Employee");
+        ReflectionTestUtils.setField(employee, "id", employeeId);
+
+        Workspace workspace = new Workspace("Office", 0.0, 0.0, 10);
+
+        SpecialDate compensatoryCollective = new SpecialDate(
+                workspace,
+                tomorrow,
+                "Folga coletiva",
+                0.0,
+                false,
+                SpecialDateType.COMPENSATORY_COLLECTIVE
+        );
+
+        SpecialDate nationalHoliday = new SpecialDate(
+                workspace,
+                dayAfterTomorrow,
+                "Feriado nacional",
+                0.0,
+                false,
+                SpecialDateType.NATIONAL
+        );
+
+        Mockito.when(userRepository.findById(employeeId)).thenReturn(Optional.of(employee));
+        Mockito.when(specialDateRepository.findByWorkspaceId(workspaceId)).thenReturn(List.of(compensatoryCollective, nationalHoliday));
+        Mockito.when(timeTrackingService.getQuarterlyBalance(Mockito.eq(employee.getEmail()), anyInt(), anyInt(), Mockito.eq(workspaceId)))
+                .thenReturn(new MonthlyBalanceResponse(0.0, 0.0, 8.0, 0, 0.0));
+
+        NextHolidayResponse response = summaryService.getNextSpecialDate(workspaceId, employeeId, employee.getEmail());
+
+        Assertions.assertNotNull(response);
+        Assertions.assertEquals("Folga coletiva", response.name());
+        Assertions.assertEquals(tomorrow, response.date());
     }
 
     private WorkspaceMembership createMembership(User user, Workspace workspace) {

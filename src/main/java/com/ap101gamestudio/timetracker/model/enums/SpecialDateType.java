@@ -5,5 +5,6 @@ public enum SpecialDateType {
     STATE,
     MUNICIPAL,
     FACULTATIVE,
-    CUSTOM
+    CUSTOM,
+    COMPENSATORY_COLLECTIVE
 }
