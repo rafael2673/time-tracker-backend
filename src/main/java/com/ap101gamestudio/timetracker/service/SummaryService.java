@@ -27,15 +27,18 @@ public class SummaryService {
     private final WorkspaceMembershipRepository membershipRepository;
     private final TimeTrackingService timeTrackingService;
     private final SpecialDateRepository specialDateRepository;
+    private final HrRuleService hrRuleService;
 
     public SummaryService(UserRepository userRepository,
                           WorkspaceMembershipRepository membershipRepository,
                           TimeTrackingService timeTrackingService,
-                          SpecialDateRepository specialDateRepository) {
+                          SpecialDateRepository specialDateRepository,
+                          HrRuleService hrRuleService) {
         this.userRepository = userRepository;
         this.membershipRepository = membershipRepository;
         this.timeTrackingService = timeTrackingService;
         this.specialDateRepository = specialDateRepository;
+        this.hrRuleService = hrRuleService;
     }
 
     public EmployeeDashboardSummary getEmployeeSummary(String authenticatedEmail, UUID employeeId, UUID workspaceId) {
@@ -51,12 +54,24 @@ public class SummaryService {
                 employee.getEmail(), now.getYear(), currentQuarter, workspaceId
         );
 
+        MonthlyBalanceResponse monthlyBalance = timeTrackingService.getMonthlyBalance(
+                employee.getEmail(), now.getYear(), now.getMonthValue(), workspaceId
+        );
+
+        VacationRightResponse vacationRight = hrRuleService.calculateVacationRights(
+                workspaceId, employeeId, now.getYear()
+        );
+
         long pendingJustifications = timeTrackingService.countJustificationsPending(employeeId, workspaceId);
 
         return new EmployeeDashboardSummary(
                 quarterlyBalance.workedHours(),
+                monthlyBalance.expectedHours(),
                 quarterlyBalance.balance(),
-                pendingJustifications
+                monthlyBalance.balance(),
+                monthlyBalance.unjustifiedAbsences(),
+                pendingJustifications,
+                vacationRight.earnedVacationDays()
         );
     }
 
@@ -252,6 +267,32 @@ public class SummaryService {
                 Math.round(regularHours * 100.0) / 100.0,
                 Math.round(totalOvertime * 100.0) / 100.0,
                 Math.round(totalAbsence * 100.0) / 100.0,
+                Math.round(totalExpected * 100.0) / 100.0
+        );
+    }
+
+    public TimeDistributionResponse getEmployeeTimeDistribution(String authenticatedEmail, UUID employeeId, UUID workspaceId, int year, int month) {
+        validarPermissaoAcesso(authenticatedEmail, employeeId, workspaceId);
+
+        User employee = buscarUsuarioPorId(employeeId);
+        validarVinculoComWorkspace(employee.getId(), workspaceId);
+
+        MonthlyBalanceResponse balance = timeTrackingService.getMonthlyBalance(
+                employee.getEmail(), year, month, workspaceId
+        );
+
+        double totalWorked = balance.workedHours();
+        double totalExpected = balance.expectedHours();
+        double overtime = Math.max(0, balance.balance());
+        double absence = Math.max(0, -balance.balance());
+
+        double regularHours = totalWorked - overtime;
+        if (regularHours < 0) regularHours = 0;
+
+        return new TimeDistributionResponse(
+                Math.round(regularHours * 100.0) / 100.0,
+                Math.round(overtime * 100.0) / 100.0,
+                Math.round(absence * 100.0) / 100.0,
                 Math.round(totalExpected * 100.0) / 100.0
         );
     }

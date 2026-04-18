@@ -7,6 +7,8 @@ import com.ap101gamestudio.timetracker.dto.MonthSummaryResponse;
 import com.ap101gamestudio.timetracker.dto.MonthlyBalanceResponse;
 import com.ap101gamestudio.timetracker.dto.NextHolidayResponse;
 import com.ap101gamestudio.timetracker.dto.AbsencePieChartResponse;
+import com.ap101gamestudio.timetracker.dto.LaborRiskRankingResponse;
+import com.ap101gamestudio.timetracker.dto.TimeDistributionResponse;
 import com.ap101gamestudio.timetracker.service.SummaryService;
 import com.ap101gamestudio.timetracker.service.TimeTrackingService;
 import org.springframework.http.ResponseEntity;
@@ -98,6 +100,17 @@ public class SummaryController {
         return ResponseEntity.ok(summaryService.getNextSpecialDate(workspaceId));
     }
 
+    @GetMapping("/employee/{employeeId}/time-distribution")
+    public ResponseEntity<TimeDistributionResponse> getEmployeeTimeDistribution(
+            @CurrentWorkspaceId UUID workspaceId,
+            @PathVariable UUID employeeId,
+            @RequestParam int year,
+            @RequestParam int month,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(summaryService.getEmployeeTimeDistribution(authentication.getName(), employeeId, workspaceId, year, month));
+    }
+
     @GetMapping("/company/absences")
     public ResponseEntity<AbsencePieChartResponse> getCompanyAbsences(
             @CurrentWorkspaceId UUID workspaceId,
@@ -118,14 +131,14 @@ public class SummaryController {
     }
 
     @GetMapping("/company/labor-risk")
-    public ResponseEntity<com.ap101gamestudio.timetracker.dto.LaborRiskRankingResponse> getLaborRiskRanking(
+    public ResponseEntity<LaborRiskRankingResponse> getLaborRiskRanking(
             @CurrentWorkspaceId UUID workspaceId
     ) {
         return ResponseEntity.ok(summaryService.getLaborRiskRanking(workspaceId));
     }
 
     @GetMapping("/company/time-distribution")
-    public ResponseEntity<com.ap101gamestudio.timetracker.dto.TimeDistributionResponse> getTimeDistribution(
+    public ResponseEntity<TimeDistributionResponse> getTimeDistribution(
             @CurrentWorkspaceId UUID workspaceId,
             @RequestParam int year,
             @RequestParam int month
