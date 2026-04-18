@@ -6,6 +6,7 @@ import lombok.Setter;
 
 import java.time.LocalDate;
 import java.util.UUID;
+import com.ap101gamestudio.timetracker.model.enums.SpecialDateType;
 
 @Setter
 @Getter
@@ -33,14 +34,19 @@ public class SpecialDate {
     @Column(name = "is_recurring", nullable = false)
     private boolean isRecurring;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "type", nullable = false)
+    private SpecialDateType type = SpecialDateType.CUSTOM;
+
     public SpecialDate() {
     }
 
-    public SpecialDate(Workspace workspace, LocalDate date, String description, Double workloadMultiplier, boolean isRecurring) {
+    public SpecialDate(Workspace workspace, LocalDate date, String description, Double workloadMultiplier, boolean isRecurring, SpecialDateType type) {
         this.workspace = workspace;
         this.date = date;
         this.description = description;
         this.workloadMultiplier = workloadMultiplier;
         this.isRecurring = isRecurring;
+        this.type = type;
     }
 }

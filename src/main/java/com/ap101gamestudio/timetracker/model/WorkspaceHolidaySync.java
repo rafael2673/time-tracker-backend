@@ -19,7 +19,7 @@ public class WorkspaceHolidaySync {
     @JoinColumn(name = "workspace_id", nullable = false)
     private Workspace workspace;
 
-    @Column(nullable = false)
+    @Column(name = "sync_year", nullable = false)
     private Integer year;
 
     @Column(name = "synced_at", nullable = false)

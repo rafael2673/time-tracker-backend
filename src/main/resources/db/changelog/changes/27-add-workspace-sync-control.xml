@@ -18,7 +18,7 @@
             <column name="workspace_id" type="UUID">
                 <constraints nullable="false" foreignKeyName="fk_sync_workspace" referencedTableName="workspaces" referencedColumnNames="id"/>
             </column>
-            <column name="year" type="INT">
+            <column name="sync_year" type="INT">
                 <constraints nullable="false"/>
             </column>
             <column name="synced_at" type="TIMESTAMP">
@@ -26,6 +26,6 @@
             </column>
         </createTable>
 
-        <addUniqueConstraint tableName="workspace_holiday_syncs" columnNames="workspace_id, year" constraintName="uk_workspace_year_sync"/>
+        <addUniqueConstraint tableName="workspace_holiday_syncs" columnNames="workspace_id, sync_year" constraintName="uk_workspace_year_sync"/>
     </changeSet>
 </databaseChangeLog>

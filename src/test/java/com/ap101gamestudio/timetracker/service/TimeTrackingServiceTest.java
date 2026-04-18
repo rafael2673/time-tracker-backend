@@ -8,6 +8,7 @@ import com.ap101gamestudio.timetracker.exceptions.DomainException;
 import com.ap101gamestudio.timetracker.model.*;
 import com.ap101gamestudio.timetracker.model.enums.RecordSource;
 import com.ap101gamestudio.timetracker.model.enums.RecordType;
+import com.ap101gamestudio.timetracker.model.enums.SpecialDateType;
 import com.ap101gamestudio.timetracker.model.enums.UserRole;
 import com.ap101gamestudio.timetracker.repository.*;
 import org.junit.jupiter.api.Assertions;
@@ -218,7 +219,7 @@ class TimeTrackingServiceTest {
         Mockito.when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
         Mockito.when(membershipRepository.findByUserIdAndWorkspaceId(any(), any())).thenReturn(Optional.of(membership));
         
-        SpecialDate specialDate = new SpecialDate(workspace, LocalDate.of(2023, 1, 2), "Half Day", 0.5, false);
+        SpecialDate specialDate = new SpecialDate(workspace, LocalDate.of(2023, 1, 2), "Half Day", 0.5, false, SpecialDateType.CUSTOM);
         Mockito.when(specialDateRepository.findRelevantDates(any(), any(), any())).thenReturn(List.of(specialDate));
         
         EmployeeLeave leave = new EmployeeLeave(workspace, user, LocalDate.of(2023, 1, 9), LocalDate.of(2023, 1, 10), "Vacation");

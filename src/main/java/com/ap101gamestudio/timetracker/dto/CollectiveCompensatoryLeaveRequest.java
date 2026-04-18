@@ -4,5 +4,6 @@ import java.time.LocalDate;
 
 public record CollectiveCompensatoryLeaveRequest(
         LocalDate date,
-        String reason
+        String reason,
+        boolean onlyEligible
 ) {}

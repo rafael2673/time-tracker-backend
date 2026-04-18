@@ -84,15 +84,15 @@ public class EmployeeLeaveService {
         int currentQuarter = (now.getMonthValue() - 1) / 3 + 1;
 
         for (WorkspaceMembership member : members) {
-            MonthlyBalanceResponse balance = timeTrackingService.getQuarterlyBalance(
-                    member.getUser().getEmail(), now.getYear(), currentQuarter, workspaceId
-            );
-            
-            // Apply only to employees with >= 8h in balance
-            if (balance.balance() >= 8.0) {
-                EmployeeLeave leave = new EmployeeLeave(workspace, member.getUser(), request.date(), request.date(), request.reason(), true);
-                leaveRepository.save(leave);
+            if (request.onlyEligible()) {
+                MonthlyBalanceResponse balance = timeTrackingService.getQuarterlyBalance(
+                        member.getUser().getEmail(), now.getYear(), currentQuarter, workspaceId
+                );
+                if (balance.balance() < 8.0) continue;
             }
+
+            EmployeeLeave leave = new EmployeeLeave(workspace, member.getUser(), request.date(), request.date(), request.reason(), true);
+            leaveRepository.save(leave);
         }
     }
 }

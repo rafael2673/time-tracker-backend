@@ -62,4 +62,14 @@ public class SpecialDateController {
         specialDateService.delete(authentication.getName(), workspaceId, id);
         return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/sync")
+    public ResponseEntity<Void> forceSync(
+            @CurrentWorkspaceId UUID workspaceId,
+            @RequestParam int year,
+            Authentication authentication
+    ) {
+        specialDateService.forceSync(authentication.getName(), workspaceId, year);
+        return ResponseEntity.ok().build();
+    }
 }
