@@ -346,7 +346,7 @@ public class TimeTrackingService {
         return today;
     }
 
-    private List<TimeRecord> filterActiveRecords(List<TimeRecord> records) {
+    public List<TimeRecord> filterActiveRecords(List<TimeRecord> records) {
         List<UUID> supersededIds = records.stream()
                 .filter(r -> r.getEditedFrom() != null && !r.isPendingApprovation() && !r.isRejected())
                 .map(r -> r.getEditedFrom().getId())
@@ -357,7 +357,7 @@ public class TimeTrackingService {
                 .toList();
     }
 
-    private double calculateWorkedHours(List<TimeRecord> records) {
+    public double calculateWorkedHours(List<TimeRecord> records) {
         if (records == null || records.isEmpty()) return 0.0;
 
         List<TimeRecord> modifiableRecords = records.stream()

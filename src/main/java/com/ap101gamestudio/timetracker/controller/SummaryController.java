@@ -66,8 +66,8 @@ public class SummaryController {
 
     @GetMapping("/monthly-balance")
     public ResponseEntity<MonthlyBalanceResponse> getMonthlyBalance(
-            @RequestParam int year,
-            @RequestParam int month,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month,
             @CurrentWorkspaceId UUID workspaceId,
             Authentication authentication
     ) {
@@ -106,8 +106,8 @@ public class SummaryController {
     public ResponseEntity<TimeDistributionResponse> getEmployeeTimeDistribution(
             @CurrentWorkspaceId UUID workspaceId,
             @PathVariable UUID employeeId,
-            @RequestParam int year,
-            @RequestParam int month,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month,
             Authentication authentication
     ) {
         return ResponseEntity.ok(summaryService.getEmployeeTimeDistribution(authentication.getName(), employeeId, workspaceId, year, month));
@@ -116,8 +116,8 @@ public class SummaryController {
     @GetMapping("/company/absences")
     public ResponseEntity<AbsencePieChartResponse> getCompanyAbsences(
             @CurrentWorkspaceId UUID workspaceId,
-            @RequestParam int year,
-            @RequestParam int month
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month
     ) {
         return ResponseEntity.ok(summaryService.getCompanyAbsences(workspaceId, year, month));
     }
@@ -132,18 +132,29 @@ public class SummaryController {
         return ResponseEntity.ok(summaryService.getCompanyYearlyAverage(workspaceId, year, policyId, locale));
     }
 
-    @GetMapping("/company/labor-risk")
+    @GetMapping("/labor-risk-ranking")
     public ResponseEntity<LaborRiskRankingResponse> getLaborRiskRanking(
-            @CurrentWorkspaceId UUID workspaceId
+            @CurrentWorkspaceId UUID workspaceId,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month
     ) {
-        return ResponseEntity.ok(summaryService.getLaborRiskRanking(workspaceId));
+        return ResponseEntity.ok(summaryService.getLaborRiskRanking(workspaceId, year, month));
+    }
+
+    @GetMapping("/company-daily-average")
+    public ResponseEntity<List<DailySummaryResponse>> getCompanyDailyAverage(
+            @CurrentWorkspaceId UUID workspaceId,
+            @RequestParam int year,
+            @RequestParam int month
+    ) {
+        return ResponseEntity.ok(summaryService.getCompanyDailyAverage(workspaceId, year, month));
     }
 
     @GetMapping("/company/time-distribution")
     public ResponseEntity<TimeDistributionResponse> getTimeDistribution(
             @CurrentWorkspaceId UUID workspaceId,
-            @RequestParam int year,
-            @RequestParam int month
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month
     ) {
         return ResponseEntity.ok(summaryService.getTimeDistribution(workspaceId, year, month));
     }

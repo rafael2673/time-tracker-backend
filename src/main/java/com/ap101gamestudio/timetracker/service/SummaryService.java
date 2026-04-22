@@ -13,12 +13,11 @@ import com.ap101gamestudio.timetracker.repository.UserRepository;
 import com.ap101gamestudio.timetracker.repository.WorkspaceMembershipRepository;
 import org.springframework.stereotype.Service;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.YearMonth;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Objects;
-import java.util.UUID;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
 
 @Service
 public class SummaryService {
@@ -143,18 +142,30 @@ public class SummaryService {
         return now;
     }
 
-    public AbsencePieChartResponse getCompanyAbsences(UUID workspaceId, int year, int month) {
+    public AbsencePieChartResponse getCompanyAbsences(UUID workspaceId, Integer year, Integer month) {
         List<WorkspaceMembership> members = buscarMembrosAtivos(workspaceId);
 
         int totalAbsences = 0;
         int totalExpectedDays = 0;
 
-        for (WorkspaceMembership member : members) {
-            MonthlyBalanceResponse balance = timeTrackingService.getMonthlyBalance(
-                    member.getUser().getEmail(), year, month, workspaceId
-            );
-            totalAbsences += balance.unjustifiedAbsences();
-            totalExpectedDays += DIAS_UTEIS_MEDIOS_POR_MES;
+        if (year != null && month != null) {
+            for (WorkspaceMembership member : members) {
+                MonthlyBalanceResponse balance = timeTrackingService.getMonthlyBalance(
+                        member.getUser().getEmail(), year, month, workspaceId
+                );
+                totalAbsences += balance.unjustifiedAbsences();
+                totalExpectedDays += DIAS_UTEIS_MEDIOS_POR_MES;
+            }
+        } else {
+            YearMonth referencePeriod = resolveLogicalReferencePeriod(workspaceId);
+            int quarter = calcularTrimestreAtual(referencePeriod);
+            for (WorkspaceMembership member : members) {
+                MonthlyBalanceResponse balance = timeTrackingService.getQuarterlyBalance(
+                        member.getUser().getEmail(), referencePeriod.getYear(), quarter, workspaceId
+                );
+                totalAbsences += balance.unjustifiedAbsences();
+                totalExpectedDays += DIAS_UTEIS_MEDIOS_POR_MES * 3;
+            }
         }
 
         double percentage = calcularPercentualFaltas(totalAbsences, totalExpectedDays);
@@ -183,36 +194,71 @@ public class SummaryService {
                 .orElseThrow(() -> new DomainException("error.employee.not_in_workspace"));
     }
 
-    public MonthlyBalanceResponse getMonthlyBalance(String authenticatedEmail, int year, int month, UUID workspaceId) {
-        if (authenticatedEmail != null) {
-            return timeTrackingService.getMonthlyBalance(authenticatedEmail, year, month, workspaceId);
-        }
+    public MonthlyBalanceResponse getMonthlyBalance(String authenticatedEmail, Integer year, Integer month, UUID workspaceId) {
+        if (year != null && month != null) {
+            if (authenticatedEmail != null) {
+                return timeTrackingService.getMonthlyBalance(authenticatedEmail, year, month, workspaceId);
+            }
 
-        List<WorkspaceMembership> members = buscarMembrosAtivos(workspaceId);
-        double totalWorked = 0;
-        double totalExpected = 0;
-        double totalBalance = 0;
-        int totalAbsences = 0;
-        double totalDsr = 0;
+            List<WorkspaceMembership> members = buscarMembrosAtivos(workspaceId);
+            double totalWorked = 0;
+            double totalExpected = 0;
+            double totalBalance = 0;
+            int totalAbsences = 0;
+            double totalDsr = 0;
 
-        for (WorkspaceMembership member : members) {
-            MonthlyBalanceResponse balance = timeTrackingService.getMonthlyBalance(
-                    member.getUser().getEmail(), year, month, workspaceId
+            for (WorkspaceMembership member : members) {
+                MonthlyBalanceResponse balance = timeTrackingService.getMonthlyBalance(
+                        member.getUser().getEmail(), year, month, workspaceId
+                );
+                totalWorked += balance.workedHours();
+                totalExpected += balance.expectedHours();
+                totalBalance += balance.balance();
+                totalAbsences += balance.unjustifiedAbsences();
+                totalDsr += balance.dsrDiscountHours();
+            }
+
+            return new MonthlyBalanceResponse(
+                    Math.round(totalWorked * 100.0) / 100.0,
+                    Math.round(totalExpected * 100.0) / 100.0,
+                    Math.round(totalBalance * 100.0) / 100.0,
+                    totalAbsences,
+                    Math.round(totalDsr * 100.0) / 100.0
             );
-            totalWorked += balance.workedHours();
-            totalExpected += balance.expectedHours();
-            totalBalance += balance.balance();
-            totalAbsences += balance.unjustifiedAbsences();
-            totalDsr += balance.dsrDiscountHours();
-        }
+        } else {
+            YearMonth referencePeriod = resolveLogicalReferencePeriod(workspaceId);
+            int quarter = calcularTrimestreAtual(referencePeriod);
 
-        return new MonthlyBalanceResponse(
-                Math.round(totalWorked * 100.0) / 100.0,
-                Math.round(totalExpected * 100.0) / 100.0,
-                Math.round(totalBalance * 100.0) / 100.0,
-                totalAbsences,
-                Math.round(totalDsr * 100.0) / 100.0
-        );
+            if (authenticatedEmail != null) {
+                return timeTrackingService.getQuarterlyBalance(authenticatedEmail, referencePeriod.getYear(), quarter, workspaceId);
+            }
+
+            List<WorkspaceMembership> members = buscarMembrosAtivos(workspaceId);
+            double totalWorked = 0;
+            double totalExpected = 0;
+            double totalBalance = 0;
+            int totalAbsences = 0;
+            double totalDsr = 0;
+
+            for (WorkspaceMembership member : members) {
+                MonthlyBalanceResponse balance = timeTrackingService.getQuarterlyBalance(
+                        member.getUser().getEmail(), referencePeriod.getYear(), quarter, workspaceId
+                );
+                totalWorked += balance.workedHours();
+                totalExpected += balance.expectedHours();
+                totalBalance += balance.balance();
+                totalAbsences += balance.unjustifiedAbsences();
+                totalDsr += balance.dsrDiscountHours();
+            }
+
+            return new MonthlyBalanceResponse(
+                    Math.round(totalWorked * 100.0) / 100.0,
+                    Math.round(totalExpected * 100.0) / 100.0,
+                    Math.round(totalBalance * 100.0) / 100.0,
+                    totalAbsences,
+                    Math.round(totalDsr * 100.0) / 100.0
+            );
+        }
     }
 
     private int calcularTrimestreAtual(YearMonth date) {
@@ -294,31 +340,113 @@ public class SummaryService {
         return summary;
     }
 
-    public LaborRiskRankingResponse getLaborRiskRanking(UUID workspaceId) {
+    public List<DailySummaryResponse> getCompanyDailyAverage(UUID workspaceId, int year, int month) {
         List<WorkspaceMembership> members = buscarMembrosAtivos(workspaceId);
-        YearMonth now = YearMonth.now();
+        YearMonth ym = YearMonth.of(year, month);
+        int daysInMonth = ym.lengthOfMonth();
         
-        int displayYear = now.getYear();
-        int displayQuarter = calcularTrimestreAtual(now);
-        
-        boolean firstMonthOfCurrentQuarterIsClosed = monthlyClosureRepository.existsByWorkspaceIdAndReferenceYearAndReferenceMonth(
-                workspaceId, displayYear, (displayQuarter - 1) * 3 + 1
-        );
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
-        if (!firstMonthOfCurrentQuarterIsClosed) {
-            YearMonth lastMonthPrevQuarter = YearMonth.of(displayYear, (displayQuarter - 1) * 3 + 1).minusMonths(1);
-            displayYear = lastMonthPrevQuarter.getYear();
-            displayQuarter = calcularTrimestreAtual(lastMonthPrevQuarter);
+        List<DailySummaryResponse> dailyAverages = new ArrayList<>();
+
+        for (int day = 1; day <= daysInMonth; day++) {
+            LocalDate currentDate = ym.atDay(day);
+            double totalWorked = 0.0;
+            double totalExpected = 0.0;
+
+            for (WorkspaceMembership member : members) {
+                List<TimeRecordResponse> recordResponses = timeTrackingService.getRecordsByUserIdAndDate(
+                        member.getUser().getId(), currentDate, workspaceId
+                );
+                
+                double workedForMember = calculateHoursFromResponses(recordResponses);
+                totalWorked += workedForMember;
+
+                double expected = 0.0;
+                List<DayOfWeek> workingDays = member.getWorkPolicy().getWorkingDaysList();
+                if (workingDays.contains(currentDate.getDayOfWeek())) {
+                    List<SpecialDate> specialDates = specialDateRepository.findRelevantDates(workspaceId, currentDate, currentDate);
+                    SpecialDate sd = specialDates.isEmpty() ? null : specialDates.getFirst();
+                    double limit = member.getWorkPolicy().getDailyMinutesLimit() / 60.0;
+                    expected = sd != null ? limit * sd.getWorkloadMultiplier() : limit;
+                }
+                totalExpected += expected;
+            }
+
+            double avgWorked = members.isEmpty() ? 0.0 : totalWorked / members.size();
+            double avgExpected = members.isEmpty() ? 0.0 : totalExpected / members.size();
+
+            dailyAverages.add(new DailySummaryResponse(
+                    String.valueOf(day),
+                    Math.round(avgWorked * 100.0) / 100.0,
+                    Math.round(avgExpected * 100.0) / 100.0,
+                    currentDate.format(formatter)
+            ));
         }
 
-        final int finalYear = displayYear;
-        final int finalQuarter = displayQuarter;
+        return dailyAverages;
+    }
+    
+    private double calculateHoursFromResponses(List<TimeRecordResponse> responses) {
+        if (responses == null || responses.isEmpty()) return 0.0;
+        
+        List<TimeRecordResponse> sorted = new ArrayList<>(responses);
+        sorted.sort(Comparator.comparing(TimeRecordResponse::registeredAt));
+        
+        long totalSeconds = 0;
+        java.time.LocalDateTime lastEntry = null;
+        String currentStatus = "IDLE";
+
+        for (TimeRecordResponse record : sorted) {
+            java.time.LocalDateTime time = record.registeredAt();
+            switch (record.recordType().name()) {
+                case "ENTRY", "PAUSE_END" -> {
+                    lastEntry = time;
+                    currentStatus = "WORKING";
+                }
+                case "PAUSE_START", "EXIT" -> {
+                    if (lastEntry != null && "WORKING".equals(currentStatus)) {
+                        totalSeconds += java.time.Duration.between(lastEntry, time).getSeconds();
+                    }
+                    currentStatus = "PAUSED_OR_FINISHED";
+                }
+            }
+        }
+
+        if ("WORKING".equals(currentStatus) && lastEntry != null) {
+            java.time.LocalDateTime now = java.time.LocalDateTime.now();
+            if (now.toLocalDate().equals(lastEntry.toLocalDate())) {
+                totalSeconds += java.time.Duration.between(lastEntry, now).getSeconds();
+            }
+        }
+
+        return totalSeconds / 3600.0;
+    }
+
+    public LaborRiskRankingResponse getLaborRiskRanking(UUID workspaceId, Integer year, Integer month) {
+        List<WorkspaceMembership> members = buscarMembrosAtivos(workspaceId);
+        
+        final int finalYear;
+        final int finalMonthOrQuarter;
+        final boolean isMonthly;
+
+        if (year != null && month != null) {
+            finalYear = year;
+            finalMonthOrQuarter = month;
+            isMonthly = true;
+        } else {
+            YearMonth referencePeriod = resolveLogicalReferencePeriod(workspaceId);
+            finalYear = referencePeriod.getYear();
+            finalMonthOrQuarter = calcularTrimestreAtual(referencePeriod);
+            isMonthly = false;
+        }
 
         List<EmployeeBalanceDTO> allBalances = members.stream()
                 .map(member -> {
-                    MonthlyBalanceResponse balance = timeTrackingService.getQuarterlyBalance(
-                            member.getUser().getEmail(), finalYear, finalQuarter, workspaceId
-                    );
+                    MonthlyBalanceResponse balance = isMonthly 
+                        ? timeTrackingService.getMonthlyBalance(member.getUser().getEmail(), finalYear, finalMonthOrQuarter, workspaceId)
+                        : timeTrackingService.getQuarterlyBalance(member.getUser().getEmail(), finalYear, finalMonthOrQuarter, workspaceId);
+                    
                     return new EmployeeBalanceDTO(
                             member.getUser().getId(),
                             member.getUser().getFullName(),
@@ -353,7 +481,7 @@ public class SummaryService {
         );
     }
 
-    public TimeDistributionResponse getTimeDistribution(UUID workspaceId, int year, int month) {
+    public TimeDistributionResponse getTimeDistribution(UUID workspaceId, Integer year, Integer month) {
         List<WorkspaceMembership> members = buscarMembrosAtivos(workspaceId);
 
         double totalExpected = 0.0;
@@ -361,29 +489,53 @@ public class SummaryService {
         double totalOvertime = 0.0;
         double totalAbsence = 0.0;
 
-        for (WorkspaceMembership member : members) {
-            MonthlyBalanceResponse balance = timeTrackingService.getMonthlyBalance(
-                    member.getUser().getEmail(), year, month, workspaceId
-            );
+        if (year != null && month != null) {
+            for (WorkspaceMembership member : members) {
+                MonthlyBalanceResponse balance = timeTrackingService.getMonthlyBalance(
+                        member.getUser().getEmail(), year, month, workspaceId
+                );
 
-            totalExpected += balance.expectedHours();
-            totalWorked += balance.workedHours();
-            totalOvertime += Math.max(0, balance.balance());
-            totalAbsence += Math.max(0, -balance.balance());
+                totalExpected += balance.expectedHours();
+                totalWorked += balance.workedHours();
+                totalOvertime += Math.max(0, balance.balance());
+                totalAbsence += Math.max(0, -balance.balance());
+            }
+        } else {
+            YearMonth referencePeriod = resolveLogicalReferencePeriod(workspaceId);
+            int quarter = calcularTrimestreAtual(referencePeriod);
+            for (WorkspaceMembership member : members) {
+                MonthlyBalanceResponse balance = timeTrackingService.getQuarterlyBalance(
+                        member.getUser().getEmail(), referencePeriod.getYear(), quarter, workspaceId
+                );
+
+                totalExpected += balance.expectedHours();
+                totalWorked += balance.workedHours();
+                totalOvertime += Math.max(0, balance.balance());
+                totalAbsence += Math.max(0, -balance.balance());
+            }
         }
 
         return createTimeDistributionResponse(totalExpected, totalWorked, totalOvertime, totalAbsence);
     }
 
-    public TimeDistributionResponse getEmployeeTimeDistribution(String authenticatedEmail, UUID employeeId, UUID workspaceId, int year, int month) {
+    public TimeDistributionResponse getEmployeeTimeDistribution(String authenticatedEmail, UUID employeeId, UUID workspaceId, Integer year, Integer month) {
         validarPermissaoAcesso(authenticatedEmail, employeeId, workspaceId);
 
         User employee = buscarUsuarioPorId(employeeId);
         validarVinculoComWorkspace(employee.getId(), workspaceId);
 
-        MonthlyBalanceResponse balance = timeTrackingService.getMonthlyBalance(
-                employee.getEmail(), year, month, workspaceId
-        );
+        MonthlyBalanceResponse balance;
+        if (year != null && month != null) {
+            balance = timeTrackingService.getMonthlyBalance(
+                    employee.getEmail(), year, month, workspaceId
+            );
+        } else {
+            YearMonth referencePeriod = resolveLogicalReferencePeriod(workspaceId);
+            int quarter = calcularTrimestreAtual(referencePeriod);
+            balance = timeTrackingService.getQuarterlyBalance(
+                    employee.getEmail(), referencePeriod.getYear(), quarter, workspaceId
+            );
+        }
 
         return createTimeDistributionResponse(
                 balance.expectedHours(),
