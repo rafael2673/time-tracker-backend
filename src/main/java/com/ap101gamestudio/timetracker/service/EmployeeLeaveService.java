@@ -8,6 +8,7 @@ import com.ap101gamestudio.timetracker.model.*;
 import com.ap101gamestudio.timetracker.model.enums.UserRole;
 import com.ap101gamestudio.timetracker.repository.*;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.YearMonth;
 import java.util.List;
@@ -37,6 +38,7 @@ public class EmployeeLeaveService {
         if (membership.getRole() == UserRole.EMPLOYEE) throw new DomainException("error.permission.denied");
     }
 
+    @Transactional
     public EmployeeLeaveResponse create(String email, UUID workspaceId, UUID employeeId, EmployeeLeaveRequest request) {
         validateManagerAccess(email, workspaceId);
         Workspace workspace = workspaceRepository.findById(workspaceId).orElseThrow(() -> new DomainException("error.workspace.not_found"));
@@ -47,6 +49,7 @@ public class EmployeeLeaveService {
         return new EmployeeLeaveResponse(saved.getId(), saved.getStartDate(), saved.getEndDate(), saved.getReason());
     }
 
+    @Transactional
     public EmployeeLeaveResponse update(String email, UUID workspaceId, UUID leaveId, EmployeeLeaveRequest request) {
         validateManagerAccess(email, workspaceId);
         EmployeeLeave leave = leaveRepository.findById(leaveId)
@@ -70,6 +73,7 @@ public class EmployeeLeaveService {
                 .map(l -> new EmployeeLeaveResponse(l.getId(), l.getStartDate(), l.getEndDate(), l.getReason())).toList();
     }
 
+    @Transactional
     public void delete(String email, UUID workspaceId, UUID leaveId) {
         validateManagerAccess(email, workspaceId);
         EmployeeLeave leave = leaveRepository.findById(leaveId).orElseThrow(() -> new DomainException("error.record.not_found"));
@@ -77,6 +81,7 @@ public class EmployeeLeaveService {
         leaveRepository.delete(leave);
     }
 
+    @Transactional
     public void createCollectiveCompensatoryLeave(String email, UUID workspaceId, com.ap101gamestudio.timetracker.dto.CollectiveCompensatoryLeaveRequest request) {
         validateManagerAccess(email, workspaceId);
         Workspace workspace = workspaceRepository.findById(workspaceId).orElseThrow(() -> new DomainException("error.workspace.not_found"));
@@ -90,7 +95,7 @@ public class EmployeeLeaveService {
                 MonthlyBalanceResponse balance = timeTrackingService.getQuarterlyBalance(
                         member.getUser().getEmail(), now.getYear(), currentQuarter, workspaceId
                 );
-                if (balance.balance() < MIN_COMPENSATORY_BALANCE_HOURS) continue;
+                if (Math.round(balance.balance() * 100.0) / 100.0 < MIN_COMPENSATORY_BALANCE_HOURS) continue;
             }
 
             EmployeeLeave leave = new EmployeeLeave(workspace, member.getUser(), request.date(), request.date(), request.reason(), true);

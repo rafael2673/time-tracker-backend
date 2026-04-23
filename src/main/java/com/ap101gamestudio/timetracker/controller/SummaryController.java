@@ -9,6 +9,7 @@ import com.ap101gamestudio.timetracker.dto.NextHolidayResponse;
 import com.ap101gamestudio.timetracker.dto.AbsencePieChartResponse;
 import com.ap101gamestudio.timetracker.dto.LaborRiskRankingResponse;
 import com.ap101gamestudio.timetracker.dto.TimeDistributionResponse;
+import com.ap101gamestudio.timetracker.dto.CompanyBalanceSummaryResponse;
 import com.ap101gamestudio.timetracker.service.SummaryService;
 import com.ap101gamestudio.timetracker.service.TimeTrackingService;
 import org.springframework.http.ResponseEntity;
@@ -113,6 +114,17 @@ public class SummaryController {
         return ResponseEntity.ok(summaryService.getEmployeeTimeDistribution(authentication.getName(), employeeId, workspaceId, year, month));
     }
 
+    @GetMapping("/employee/{employeeId}/daily-average")
+    public ResponseEntity<List<DailySummaryResponse>> getEmployeeDailyAverage(
+            @CurrentWorkspaceId UUID workspaceId,
+            @PathVariable UUID employeeId,
+            @RequestParam int year,
+            @RequestParam int month,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(summaryService.getEmployeeDailyAverage(authentication.getName(), employeeId, workspaceId, year, month));
+    }
+
     @GetMapping("/company/absences")
     public ResponseEntity<AbsencePieChartResponse> getCompanyAbsences(
             @CurrentWorkspaceId UUID workspaceId,
@@ -158,4 +170,13 @@ public class SummaryController {
     ) {
         return ResponseEntity.ok(summaryService.getTimeDistribution(workspaceId, year, month));
     }
-}
+
+    @GetMapping("/company/balance")
+    public ResponseEntity<CompanyBalanceSummaryResponse> getCompanyBalanceSummary(
+            @CurrentWorkspaceId UUID workspaceId,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month
+    ) {
+        return ResponseEntity.ok(summaryService.getCompanyBalanceSummary(workspaceId, year, month));
+    }
+    }

@@ -70,9 +70,7 @@ class SummaryServiceTest {
                 createMembership(uN1, workspace), createMembership(uN2, workspace)
         );
 
-        Mockito.when(membershipRepository.findByWorkspaceId(workspaceId)).thenReturn(members);
-        Mockito.when(monthlyClosureRepository.existsByWorkspaceIdAndReferenceYearAndReferenceMonth(
-                Mockito.eq(workspaceId), anyInt(), anyInt())).thenReturn(true);
+        Mockito.when(membershipRepository.findByWorkspaceIdWithPolicyAndUser(workspaceId)).thenReturn(members);
 
         Mockito.when(timeTrackingService.getQuarterlyBalance(Mockito.eq("p1@e.com"), anyInt(), anyInt(), Mockito.eq(workspaceId)))
                 .thenReturn(new MonthlyBalanceResponse(0.0, 0.0, 20.0, 0, 0.0));
@@ -107,7 +105,7 @@ class SummaryServiceTest {
         User u1 = new User("u1@e.com", "pass", "U1"); ReflectionTestUtils.setField(u1, "id", UUID.randomUUID());
         User u2 = new User("u2@e.com", "pass", "U2"); ReflectionTestUtils.setField(u2, "id", UUID.randomUUID());
 
-        Mockito.when(membershipRepository.findByWorkspaceId(workspaceId)).thenReturn(List.of(
+        Mockito.when(membershipRepository.findByWorkspaceIdWithPolicyAndUser(workspaceId)).thenReturn(List.of(
                 createMembership(u1, workspace), createMembership(u2, workspace)
         ));
 
@@ -157,8 +155,6 @@ class SummaryServiceTest {
 
         Mockito.when(userRepository.findById(employeeId)).thenReturn(Optional.of(employee));
         Mockito.when(specialDateRepository.findByWorkspaceId(workspaceId)).thenReturn(List.of(compensatoryCollective, nationalHoliday));
-        Mockito.when(monthlyClosureRepository.existsByWorkspaceIdAndReferenceYearAndReferenceMonth(
-                Mockito.eq(workspaceId), anyInt(), anyInt())).thenReturn(true);
         Mockito.when(timeTrackingService.getQuarterlyBalance(Mockito.eq(employee.getEmail()), anyInt(), anyInt(), Mockito.eq(workspaceId)))
                 .thenReturn(new MonthlyBalanceResponse(0.0, 0.0, 7.5, 0, 0.0));
 
@@ -201,8 +197,6 @@ class SummaryServiceTest {
 
         Mockito.when(userRepository.findById(employeeId)).thenReturn(Optional.of(employee));
         Mockito.when(specialDateRepository.findByWorkspaceId(workspaceId)).thenReturn(List.of(compensatoryCollective, nationalHoliday));
-        Mockito.when(monthlyClosureRepository.existsByWorkspaceIdAndReferenceYearAndReferenceMonth(
-                Mockito.eq(workspaceId), anyInt(), anyInt())).thenReturn(true);
         Mockito.when(timeTrackingService.getQuarterlyBalance(Mockito.eq(employee.getEmail()), anyInt(), anyInt(), Mockito.eq(workspaceId)))
                 .thenReturn(new MonthlyBalanceResponse(0.0, 0.0, 8.0, 0, 0.0));
 

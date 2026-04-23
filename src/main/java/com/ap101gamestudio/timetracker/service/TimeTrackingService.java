@@ -32,6 +32,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -149,6 +150,7 @@ public class TimeTrackingService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
     public List<DailySummaryResponse> getWeeklySummary(String email, LocalDate referenceDate, UUID workspaceId, String localeString) {
         User user = userRepository.findByEmail(email).orElseThrow(() -> new DomainException("error.user.not_found"));
         WorkspaceMembership membership = membershipRepository.findByUserIdAndWorkspaceId(user.getId(), workspaceId).orElseThrow(() -> new DomainException("error.permission.denied"));
@@ -191,8 +193,8 @@ public class TimeTrackingService {
         return weeklySummary;
     }
 
+    @Transactional(readOnly = true)
     public MonthlyBalanceResponse getQuarterlyBalance(String email, int year, int quarter, UUID workspaceId) {
-        User user = userRepository.findByEmail(email).orElseThrow(() -> new DomainException("error.user.not_found"));
         int startMonth = (quarter - 1) * 3 + 1;
         int endMonth = startMonth + 2;
 
@@ -203,14 +205,12 @@ public class TimeTrackingService {
         double totalDsr = 0;
 
         for(int m = startMonth; m <= endMonth; m++) {
-            var closure = monthlyClosureRepository.findByWorkspaceIdAndUserIdAndReferenceYearAndReferenceMonth(workspaceId, user.getId(), year, m);
-            if (closure.isPresent()) {
-                totalWorked += closure.get().getWorkedHours();
-                totalExpected += closure.get().getExpectedHours();
-                totalBalance += closure.get().getRawBalance();
-                totalAbsences += closure.get().getUnjustifiedAbsences();
-                totalDsr += closure.get().getDsrDiscountHours();
-            }
+            MonthlyBalanceResponse monthlyBalance = getMonthlyBalance(email, year, m, workspaceId);
+            totalWorked += monthlyBalance.workedHours();
+            totalExpected += monthlyBalance.expectedHours();
+            totalBalance += monthlyBalance.balance();
+            totalAbsences += monthlyBalance.unjustifiedAbsences();
+            totalDsr += monthlyBalance.dsrDiscountHours();
         }
 
         return new MonthlyBalanceResponse(roundHours(totalWorked), roundHours(totalExpected), roundHours(totalBalance), totalAbsences, totalDsr);
@@ -227,6 +227,7 @@ public class TimeTrackingService {
         return years;
     }
 
+    @Transactional(readOnly = true)
     public List<MonthSummaryResponse> getYearlySummary(String email, int year, UUID workspaceId, String localeString) {
         User user = userRepository.findByEmail(email).orElseThrow(() -> new DomainException("error.user.not_found"));
         WorkspaceMembership membership = membershipRepository.findByUserIdAndWorkspaceId(user.getId(), workspaceId).orElseThrow(() -> new DomainException("error.permission.denied"));
@@ -253,6 +254,7 @@ public class TimeTrackingService {
         return summary;
     }
 
+    @Transactional(readOnly = true)
     public MonthlyBalanceResponse getMonthlyBalance(String email, int year, int month, UUID workspaceId) {
         User user = userRepository.findByEmail(email).orElseThrow(() -> new DomainException("error.user.not_found"));
         WorkspaceMembership membership = membershipRepository.findByUserIdAndWorkspaceId(user.getId(), workspaceId).orElseThrow(() -> new DomainException("error.permission.denied"));
@@ -421,6 +423,10 @@ public class TimeTrackingService {
 
     public long countJustificationsPending(UUID employeeId, UUID workspaceId){
         return timeRecordRepository.countByUserIdAndWorkspaceIdAndPendingApprovationIsTrue(employeeId, workspaceId);
+    }
+
+    public long countWorkspaceJustificationsPending(UUID workspaceId){
+        return timeRecordRepository.countByWorkspaceIdAndPendingApprovationIsTrue(workspaceId);
     }
 
     public List<TimeRecordResponse> getRecordsByUserIdAndDate(UUID employeeId, LocalDate date, UUID workspaceId) {

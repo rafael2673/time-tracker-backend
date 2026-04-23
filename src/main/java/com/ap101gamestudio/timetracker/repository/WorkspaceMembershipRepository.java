@@ -8,7 +8,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -18,6 +17,10 @@ public interface WorkspaceMembershipRepository extends JpaRepository<WorkspaceMe
     List<WorkspaceMembership> findByUserId(UUID userId);
     Optional<WorkspaceMembership> findByUserIdAndWorkspaceId(UUID userId, UUID workspaceId);
     List<WorkspaceMembership> findAllByUserId(UUID userId);
+
+    @Query("SELECT wm FROM WorkspaceMembership wm JOIN FETCH wm.workPolicy JOIN FETCH wm.user WHERE wm.user.id = :userId AND wm.workspace.id = :workspaceId")
+    Optional<WorkspaceMembership> findByUserIdAndWorkspaceIdWithPolicy(@Param("userId") UUID userId, @Param("workspaceId") UUID workspaceId);
+
     @Query("SELECT wm FROM WorkspaceMembership wm WHERE wm.workspace.id = :workspaceId AND " +
             "(:search IS NULL OR :search = '' OR LOWER(wm.user.fullName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(wm.user.email) LIKE LOWER(CONCAT('%', :search, '%'))) AND " +
             "(:role IS NULL OR wm.role = :role)")
@@ -28,4 +31,7 @@ public interface WorkspaceMembershipRepository extends JpaRepository<WorkspaceMe
             Pageable pageable);
 
     List<WorkspaceMembership> findByWorkspaceId(UUID workspaceId);
-}
+
+    @Query("SELECT wm FROM WorkspaceMembership wm JOIN FETCH wm.workPolicy JOIN FETCH wm.user WHERE wm.workspace.id = :workspaceId AND wm.active = true")
+    List<WorkspaceMembership> findByWorkspaceIdWithPolicyAndUser(@Param("workspaceId") UUID workspaceId);
+    }
