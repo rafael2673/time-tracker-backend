@@ -62,9 +62,11 @@ class TimeTrackingServiceTest {
         UUID workspaceId = UUID.randomUUID();
         Workspace office = new Workspace("Office", -5.8428, -35.1969, 100);
         User user = new User(email, "pass", "Rafa");
+        WorkspaceMembership membership = new WorkspaceMembership(user, office, UserRole.EMPLOYEE, null);
 
         Mockito.when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
         Mockito.when(workspaceRepository.findById(workspaceId)).thenReturn(Optional.of(office));
+        Mockito.when(membershipRepository.findByUserIdAndWorkspaceId(any(), any())).thenReturn(Optional.of(membership));
         Mockito.when(timeRecordRepository.save(any(TimeRecord.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         CreateTimeRecordRequest request = new CreateTimeRecordRequest(

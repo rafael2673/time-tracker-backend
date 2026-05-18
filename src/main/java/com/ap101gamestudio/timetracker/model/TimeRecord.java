@@ -56,11 +56,11 @@ public class TimeRecord {
     private boolean rejected = false;
 
     @Setter
-    @Column(precision = 10, scale = 8)
+    @Column(name = "latitude")
     private Double latitude;
 
     @Setter
-    @Column(precision = 11, scale = 8)
+    @Column(name = "longitude")
     private Double longitude;
 
     protected TimeRecord() {

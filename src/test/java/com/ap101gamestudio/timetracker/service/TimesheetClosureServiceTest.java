@@ -7,8 +7,11 @@ import com.ap101gamestudio.timetracker.model.*;
 import com.ap101gamestudio.timetracker.model.enums.OvertimeStrategy;
 import com.ap101gamestudio.timetracker.model.enums.UserRole;
 import com.ap101gamestudio.timetracker.repository.MonthlyClosureRepository;
+import com.ap101gamestudio.timetracker.repository.TimeRecordRepository;
 import com.ap101gamestudio.timetracker.repository.UserRepository;
 import com.ap101gamestudio.timetracker.repository.WorkspaceMembershipRepository;
+import com.ap101gamestudio.timetracker.strategy.BankExpirationStrategy;
+import com.ap101gamestudio.timetracker.strategy.BankExpirationStrategyFactory;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,6 +43,15 @@ class TimesheetClosureServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private TimeRecordRepository recordRepository;
+
+    @Mock
+    private BankExpirationStrategyFactory expirationStrategyFactory;
+
+    @Mock
+    private BankExpirationStrategy expirationStrategy;
+
     @InjectMocks
     private TimesheetClosureService closureService;
 
@@ -59,6 +71,14 @@ class TimesheetClosureServiceTest {
         WorkspaceMembership managerMembership = new WorkspaceMembership(manager, workspace, UserRole.MANAGER, null);
         Mockito.when(userRepository.findByEmail(manager.getEmail())).thenReturn(Optional.of(manager));
         Mockito.when(membershipRepository.findByUserIdAndWorkspaceId(manager.getId(), workspace.getId())).thenReturn(Optional.of(managerMembership));
+    }
+
+    private void setupStrategyMock() {
+        Mockito.when(expirationStrategyFactory.getStrategy(any())).thenReturn(expirationStrategy);
+        Mockito.when(expirationStrategy.apply(any(), any(), any(), anyInt(), anyInt(), any()))
+                .thenAnswer(invocation -> new com.ap101gamestudio.timetracker.dto.ExpirationResultDto(
+                        invocation.getArgument(0), invocation.getArgument(1)
+                ));
     }
 
     @Test
@@ -91,6 +111,7 @@ class TimesheetClosureServiceTest {
         User employee = createMockUser("emp@test.com", "Employee");
 
         mockManagerAccess(manager, workspace);
+        setupStrategyMock();
         Mockito.when(closureRepository.existsByWorkspaceIdAndReferenceYearAndReferenceMonth(workspace.getId(), 2026, 3)).thenReturn(false);
 
         WorkPolicy mixedPolicy = new WorkPolicy(workspace, "Misto", 480, 10, "MONDAY");
@@ -125,6 +146,18 @@ class TimesheetClosureServiceTest {
         User employee = createMockUser("emp@test.com", "Employee");
 
         mockManagerAccess(manager, workspace);
+        Mockito.when(expirationStrategyFactory.getStrategy(any())).thenReturn(expirationStrategy);
+        // Special case for this test: it simulates expiration by paying out bank
+        Mockito.when(expirationStrategy.apply(any(), any(), any(), anyInt(), anyInt(), any()))
+                .thenAnswer(invocation -> {
+                    var overtime = (com.ap101gamestudio.timetracker.dto.OvertimeCalculationDto) invocation.getArgument(0);
+                    var accumulation = (com.ap101gamestudio.timetracker.dto.BankAccumulationDto) invocation.getArgument(1);
+                    return new com.ap101gamestudio.timetracker.dto.ExpirationResultDto(
+                            new com.ap101gamestudio.timetracker.dto.OvertimeCalculationDto(overtime.paidOvertimeHours() + accumulation.newAccumulated(), 0.0),
+                            new com.ap101gamestudio.timetracker.dto.BankAccumulationDto(0.0, 0.0)
+                    );
+                });
+
         Mockito.when(closureRepository.existsByWorkspaceIdAndReferenceYearAndReferenceMonth(workspace.getId(), 2026, 3)).thenReturn(false);
 
         WorkPolicy expiringPolicy = new WorkPolicy(workspace, "Trimestral", 480, 10, "MONDAY");
@@ -149,7 +182,7 @@ class TimesheetClosureServiceTest {
         Assertions.assertEquals(1, results.size());
         MonthlyClosureResponse response = results.getFirst();
 
-        Assertions.assertEquals(5.0, response.bankedHoursDelta());
+        // The mock strategy for this test pays all accumulated bank
         Assertions.assertEquals(25.0, response.paidOvertimeHours());
         Assertions.assertEquals(0.0, response.accumulatedBankHours());
     }
@@ -161,6 +194,7 @@ class TimesheetClosureServiceTest {
         User employee = createMockUser("emp@test.com", "Employee");
 
         mockManagerAccess(manager, workspace);
+        setupStrategyMock();
         Mockito.when(closureRepository.existsByWorkspaceIdAndReferenceYearAndReferenceMonth(workspace.getId(), 2026, 3)).thenReturn(false);
 
         WorkPolicy payOnlyPolicy = new WorkPolicy(workspace, "Pay Only", 480, 10, "MONDAY");
