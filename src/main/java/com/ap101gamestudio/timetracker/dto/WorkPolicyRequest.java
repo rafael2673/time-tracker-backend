@@ -1,5 +1,6 @@
 package com.ap101gamestudio.timetracker.dto;
 
+import com.ap101gamestudio.timetracker.model.enums.BankExpirationModel;
 import com.ap101gamestudio.timetracker.model.enums.OvertimeStrategy;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -12,5 +13,6 @@ public record WorkPolicyRequest(
         @NotBlank String workingDays,
         @NotNull OvertimeStrategy overtimeStrategy,
         @Min(0) double maxBankHoursPerMonth,
-        @Min(0) int bankExpirationMonths
+        @Min(0) int bankExpirationMonths,
+        @NotNull BankExpirationModel expirationModel
 ) {}

@@ -8,6 +8,7 @@ import com.ap101gamestudio.timetracker.dto.LinkAccountRequest;
 import com.ap101gamestudio.timetracker.exceptions.DomainException;
 import com.ap101gamestudio.timetracker.model.LinkCode;
 import com.ap101gamestudio.timetracker.model.User;
+import com.ap101gamestudio.timetracker.model.WorkspaceMembership;
 import com.ap101gamestudio.timetracker.repository.LinkCodeRepository;
 import com.ap101gamestudio.timetracker.repository.UserRepository;
 import com.ap101gamestudio.timetracker.repository.WorkspaceMembershipRepository;
@@ -20,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -75,13 +77,29 @@ public class AuthenticationService {
         User user = userRepository.findByEmail(request.email())
                 .orElseThrow(() -> new DomainException("error.user.not_found"));
 
-        UUID defaultWorkspaceId = membershipRepository.findByUserId(user.getId())
-                .stream()
-                .findFirst()
-                .map(membership -> membership.getWorkspace().getId())
-                .orElse(null);
+        return generateTokenForUser(user);
+    }
 
-        String jwtToken = jwtService.generateStandardUserToken(user, defaultWorkspaceId);
+    private JwtAuthenticationResponse generateTokenForUser(User user) {
+        List<WorkspaceMembership> memberships = membershipRepository.findByUserId(user.getId());
+
+        if (user.isSystemAdmin()) {
+            UUID defaultWorkspaceId = memberships.stream()
+                    .filter(m -> m.getWorkspace().isActive())
+                    .findFirst()
+                    .map(membership -> membership.getWorkspace().getId())
+                    .orElse(null);
+
+            String jwtToken = jwtService.generateStandardUserToken(user, defaultWorkspaceId);
+            return new JwtAuthenticationResponse(jwtToken, 86400000L);
+        }
+
+        WorkspaceMembership activeMembership = memberships.stream()
+                .filter(m -> m.getWorkspace().isActive())
+                .findFirst()
+                .orElseThrow(() -> new DomainException("error.workspace.inactive"));
+
+        String jwtToken = jwtService.generateStandardUserToken(user, activeMembership.getWorkspace().getId());
         return new JwtAuthenticationResponse(jwtToken, 86400000L);
     }
 
@@ -114,13 +132,6 @@ public class AuthenticationService {
         userRepository.save(user);
         linkCodeRepository.delete(linkCode);
 
-        UUID defaultWorkspaceId = membershipRepository.findByUserId(user.getId())
-                .stream()
-                .findFirst()
-                .map(membership -> membership.getWorkspace().getId())
-                .orElse(null);
-
-        String jwtToken = jwtService.generateStandardUserToken(user, defaultWorkspaceId);
-        return new JwtAuthenticationResponse(jwtToken, 86400000L);
+        return generateTokenForUser(user);
     }
 }

@@ -7,6 +7,8 @@ import com.ap101gamestudio.timetracker.model.enums.ClosurePendingStrategy;
 import com.ap101gamestudio.timetracker.model.enums.OvertimeStrategy;
 import com.ap101gamestudio.timetracker.model.enums.UserRole;
 import com.ap101gamestudio.timetracker.repository.*;
+import com.ap101gamestudio.timetracker.strategy.BankExpirationStrategy;
+import com.ap101gamestudio.timetracker.strategy.BankExpirationStrategyFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,17 +25,20 @@ public class TimesheetClosureService {
     private final TimeTrackingService timeTrackingService;
     private final UserRepository userRepository;
     private final TimeRecordRepository recordRepository;
+    private final BankExpirationStrategyFactory expirationStrategyFactory;
 
     public TimesheetClosureService(MonthlyClosureRepository closureRepository,
                                    WorkspaceMembershipRepository membershipRepository,
                                    TimeTrackingService timeTrackingService,
                                    UserRepository userRepository,
-                                   TimeRecordRepository recordRepository) {
+                                   TimeRecordRepository recordRepository,
+                                   BankExpirationStrategyFactory expirationStrategyFactory) {
         this.closureRepository = closureRepository;
         this.membershipRepository = membershipRepository;
         this.timeTrackingService = timeTrackingService;
         this.userRepository = userRepository;
         this.recordRepository = recordRepository;
+        this.expirationStrategyFactory = expirationStrategyFactory;
     }
 
     private void validateManagerAccess(String email, UUID workspaceId) {
@@ -129,30 +134,11 @@ public class TimesheetClosureService {
         var overtimeCalculation = calculateOvertime(balance.balance(), policy);
         var accumulation = calculateAccumulation(member.getUser().getId(), workspaceId, previousMonth, overtimeCalculation.bankedDelta());
 
-        var finalBalances = applyExpirationRules(overtimeCalculation, accumulation, policy, month);
+        BankExpirationStrategy expirationStrategy = expirationStrategyFactory.getStrategy(policy.getExpirationModel());
+        var finalBalances = expirationStrategy.apply(overtimeCalculation, accumulation, policy, year, month, member.getUser().getId());
 
         MonthlyClosure closure = saveClosure(member, year, month, balance, finalBalances.overtime(), finalBalances.accumulation());
         return mapToResponse(closure);
-    }
-
-    private ExpirationResultDto applyExpirationRules(OvertimeCalculationDto overtime, BankAccumulationDto accumulation, WorkPolicy policy, int month) {
-        if (policy == null || policy.getBankExpirationMonths() <= 0 || month % policy.getBankExpirationMonths() != 0) {
-            return new ExpirationResultDto(overtime, accumulation);
-        }
-
-        double finalAccumulated = accumulation.newAccumulated();
-        OvertimeCalculationDto newOvertime = overtime;
-
-        if (finalAccumulated > 0) {
-            newOvertime = new OvertimeCalculationDto(
-                    overtime.paidOvertimeHours() + finalAccumulated,
-                    overtime.bankedDelta()
-            );
-        }
-
-        BankAccumulationDto newAccumulation = new BankAccumulationDto(accumulation.previousAccumulated(), 0.0);
-
-        return new ExpirationResultDto(newOvertime, newAccumulation);
     }
 
     private OvertimeCalculationDto calculateOvertime(double rawBalance, WorkPolicy policy) {
@@ -215,15 +201,45 @@ public class TimesheetClosureService {
                 closure.getPaidOvertimeHours(),
                 closure.getBankedHoursDelta(),
                 closure.getAccumulatedBankHours(),
-                closure.getClosedAt()
+                closure.getClosedAt(),
+                closure.getSignedAt()
         );
     }
 
     public List<MonthlyClosureResponse> getClosures(String email, UUID workspaceId, int year, int month) {
-        validateManagerAccess(email, workspaceId);
+        // Se for manager, retorna todos do mês. Se for empregado, retorna só o dele.
+        User user = userRepository.findByEmail(email).orElseThrow(() -> new DomainException("error.user.not_found"));
+        WorkspaceMembership membership = membershipRepository.findByUserIdAndWorkspaceId(user.getId(), workspaceId)
+                .orElseThrow(() -> new DomainException("error.permission.denied"));
+
+        if (membership.getRole() == com.ap101gamestudio.timetracker.model.enums.UserRole.EMPLOYEE) {
+            return closureRepository.findByWorkspaceIdAndUserIdAndReferenceYearAndReferenceMonth(workspaceId, user.getId(), year, month)
+                    .stream()
+                    .map(this::mapToResponse)
+                    .toList();
+        }
+
         return closureRepository.findByWorkspaceIdAndReferenceYearAndReferenceMonth(workspaceId, year, month)
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
+    }
+
+    @Transactional
+    public MonthlyClosureResponse signClosure(String email, UUID workspaceId, UUID closureId) {
+        User user = userRepository.findByEmail(email).orElseThrow(() -> new DomainException("error.user.not_found"));
+        MonthlyClosure closure = closureRepository.findById(closureId).orElseThrow(() -> new DomainException("error.closure.not_found"));
+
+        if (!closure.getWorkspace().getId().equals(workspaceId) || !closure.getUser().getId().equals(user.getId())) {
+            throw new DomainException("error.permission.denied");
+        }
+
+        if (closure.getSignedAt() != null) {
+            throw new DomainException("error.closure.already_signed");
+        }
+
+        closure.setSignedAt(LocalDateTime.now());
+        MonthlyClosure saved = closureRepository.save(closure);
+        return mapToResponse(saved);
     }
 }

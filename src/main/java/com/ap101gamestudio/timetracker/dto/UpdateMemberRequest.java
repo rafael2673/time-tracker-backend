@@ -7,5 +7,6 @@ import java.util.UUID;
 public record UpdateMemberRequest(
         @NotBlank String fullName,
         @NotBlank String role,
-        @NotNull UUID workPolicyId
+        @NotNull UUID workPolicyId,
+        boolean allowHomeOffice
 ) {}

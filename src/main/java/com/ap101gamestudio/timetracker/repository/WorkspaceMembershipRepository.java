@@ -34,4 +34,6 @@ public interface WorkspaceMembershipRepository extends JpaRepository<WorkspaceMe
 
     @Query("SELECT wm FROM WorkspaceMembership wm JOIN FETCH wm.workPolicy JOIN FETCH wm.user WHERE wm.workspace.id = :workspaceId AND wm.active = true")
     List<WorkspaceMembership> findByWorkspaceIdWithPolicyAndUser(@Param("workspaceId") UUID workspaceId);
-    }
+
+    long countByWorkspaceId(UUID workspaceId);
+}

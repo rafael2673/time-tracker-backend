@@ -39,4 +39,13 @@ public class TimesheetClosureController {
     ) {
         return ResponseEntity.ok(closureService.getClosures(authentication.getName(), workspaceId, year, month));
     }
+
+    @PostMapping("/{id}/sign")
+    public ResponseEntity<MonthlyClosureResponse> signClosure(
+            @CurrentWorkspaceId UUID workspaceId,
+            @PathVariable UUID id,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(closureService.signClosure(authentication.getName(), workspaceId, id));
+    }
 }

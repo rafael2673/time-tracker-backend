@@ -91,6 +91,11 @@ public class TimeTrackingService {
         Workspace workspace = workspaceRepository.findById(workspaceId)
                 .orElseThrow(() -> new DomainException("error.workspace.not_found"));
 
+        WorkspaceMembership membership = membershipRepository.findByUserIdAndWorkspaceId(user.getId(), workspaceId)
+                .orElseThrow(() -> new DomainException("error.permission.denied"));
+
+        validateGeofencing(workspace, membership, request);
+
         TimeRecord record = new TimeRecord(
                 user,
                 workspace,
@@ -98,11 +103,39 @@ public class TimeTrackingService {
                 request.source(),
                 request.registeredAt() != null ? request.registeredAt() : LocalDateTime.now(),
                 null,
-                null
+                null,
+                request.latitude(),
+                request.longitude()
         );
 
         TimeRecord saved = timeRecordRepository.save(record);
         return mapToResponse(saved);
+    }
+
+    private void validateGeofencing(Workspace workspace, WorkspaceMembership membership, CreateTimeRecordRequest request) {
+        if (request.latitude() == null || request.longitude() == null) {
+            return;
+        }
+
+        double distance = calculateDistance(
+                workspace.getLatitude(), workspace.getLongitude(),
+                request.latitude(), request.longitude()
+        );
+
+        if (distance > workspace.getRadiusMeters() && !membership.isAllowHomeOffice()) {
+            throw new DomainException("error.geofencing.out_of_radius");
+        }
+    }
+
+    private double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+        final int R = 6371000; // Earth radius in meters
+        double latDistance = Math.toRadians(lat2 - lat1);
+        double lonDistance = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(latDistance / 2) * Math.sin(latDistance / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
     }
 
     public TimeRecordResponse updateRecord(UUID id, String email, UpdateTimeRecordRequest request, UUID workspaceId) {
@@ -417,7 +450,9 @@ public class TimeTrackingService {
                 saved.getRecordType(),
                 saved.getSource(),
                 saved.getRegisteredAt(),
-                saved.getJustification()
+                saved.getJustification(),
+                saved.getLatitude(),
+                saved.getLongitude()
         );
     }
 

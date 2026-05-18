@@ -105,7 +105,7 @@ public class UserService {
         List<WorkspaceMembership> memberships = membershipRepository.findByUserId(user.getId());
 
         if (memberships.isEmpty()) {
-            return new UserProfileResponse(user.getId(), user.getFullName(), user.getEmail(), null, null, null);
+            return new UserProfileResponse(user.getId(), user.getFullName(), user.getEmail(), null, null, null, user.isSystemAdmin());
         }
 
         WorkspaceMembership activeMembership = determineActiveMembership(memberships, currentWorkspaceId);
@@ -116,7 +116,8 @@ public class UserService {
                 user.getEmail(),
                 activeMembership.getRole().name(),
                 activeMembership.getWorkspace().getId(),
-                activeMembership.getWorkspace().getName()
+                activeMembership.getWorkspace().getName(),
+                user.isSystemAdmin()
         );
     }
 

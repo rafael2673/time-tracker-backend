@@ -4,8 +4,10 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
@@ -50,6 +52,15 @@ public class User implements UserDetails {
     @Column(name = "is_system_admin", nullable = false)
     private boolean systemAdmin = false;
 
+    @Getter
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @PrePersist
+    protected void onCreate() {
+        this.createdAt = LocalDateTime.now();
+    }
+
     protected User() {}
 
     public User(String email, String passwordHash, String fullName) {
@@ -63,6 +74,9 @@ public class User implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
+        if (systemAdmin) {
+            return List.of(new SimpleGrantedAuthority("ROLE_SYSTEM_ADMIN"));
+        }
         return List.of();
     }
 

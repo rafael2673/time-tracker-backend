@@ -11,5 +11,6 @@ public record WorkspaceMemberResponse(
         String workPolicyName,
         UUID workPolicyId,
         LocalDateTime joinedAt,
-        boolean active
+        boolean active,
+        boolean allowHomeOffice
 ) {}

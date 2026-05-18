@@ -13,6 +13,8 @@ public record TimeRecordResponse(
         RecordType recordType,
         RecordSource source,
         LocalDateTime registeredAt,
-        String justification
+        String justification,
+        Double latitude,
+        Double longitude
 ) {
 }

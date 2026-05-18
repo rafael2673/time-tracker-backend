@@ -10,5 +10,6 @@ public record AddMemberRequest(
         @NotBlank @Email String email,
         @NotBlank String fullName,
         @NotNull UserRole role,
-        @NotNull UUID workPolicyId
+        @NotNull UUID workPolicyId,
+        boolean allowHomeOffice
 ) {}

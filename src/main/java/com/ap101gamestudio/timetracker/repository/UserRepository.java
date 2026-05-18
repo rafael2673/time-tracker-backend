@@ -3,10 +3,12 @@ package com.ap101gamestudio.timetracker.repository;
 import com.ap101gamestudio.timetracker.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
 public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByEmail(String email);
     Optional<User> findByRecoveryEmail(String recoveryEmail);
+    long countByCreatedAtAfter(LocalDateTime date);
 }

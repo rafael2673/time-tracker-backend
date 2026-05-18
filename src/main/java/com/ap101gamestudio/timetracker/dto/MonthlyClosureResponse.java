@@ -15,5 +15,6 @@ public record MonthlyClosureResponse(
         double paidOvertimeHours,
         double bankedHoursDelta,
         double accumulatedBankHours,
-        LocalDateTime closedAt
+        LocalDateTime closedAt,
+        LocalDateTime signedAt
 ) {}

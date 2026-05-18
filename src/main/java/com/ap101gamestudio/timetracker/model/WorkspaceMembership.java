@@ -50,6 +50,10 @@ public class WorkspaceMembership {
     @Column(nullable = false)
     private boolean active = true;
 
+    @Setter
+    @Column(name = "allow_home_office", nullable = false)
+    private boolean allowHomeOffice = false;
+
 
     protected WorkspaceMembership() {}
 

@@ -1,5 +1,6 @@
 package com.ap101gamestudio.timetracker.model;
 
+import com.ap101gamestudio.timetracker.model.enums.BankExpirationModel;
 import com.ap101gamestudio.timetracker.model.enums.OvertimeStrategy;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -46,6 +47,10 @@ public class WorkPolicy {
 
     @Column(name = "bank_expiration_months", nullable = false)
     private int bankExpirationMonths = 0;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "expiration_model", nullable = false)
+    private BankExpirationModel expirationModel = BankExpirationModel.FIXED_CYCLE;
 
 
     protected WorkPolicy() {}

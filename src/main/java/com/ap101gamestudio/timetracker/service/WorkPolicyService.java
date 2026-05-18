@@ -60,6 +60,7 @@ public class WorkPolicyService {
         policy.setOvertimeStrategy(request.overtimeStrategy());
         policy.setMaxBankHoursPerMonth(request.maxBankHoursPerMonth());
         policy.setBankExpirationMonths(request.bankExpirationMonths());
+        policy.setExpirationModel(request.expirationModel());
 
         return policyRepository.save(policy);
     }
@@ -82,6 +83,7 @@ public class WorkPolicyService {
         policy.setOvertimeStrategy(request.overtimeStrategy());
         policy.setMaxBankHoursPerMonth(request.maxBankHoursPerMonth());
         policy.setBankExpirationMonths(request.bankExpirationMonths());
+        policy.setExpirationModel(request.expirationModel());
 
         return policyRepository.save(policy);
     }

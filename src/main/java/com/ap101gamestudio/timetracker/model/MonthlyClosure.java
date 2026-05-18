@@ -52,6 +52,9 @@ public class MonthlyClosure {
     @Column(name = "closed_at", nullable = false)
     private LocalDateTime closedAt;
 
+    @Column(name = "signed_at")
+    private LocalDateTime signedAt;
+
     @Column(name = "unjustified_absences", nullable = false)
     private int unjustifiedAbsences = 0;
 

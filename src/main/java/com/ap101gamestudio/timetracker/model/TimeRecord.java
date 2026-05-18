@@ -55,6 +55,14 @@ public class TimeRecord {
     @Column(name = "rejected", nullable = false)
     private boolean rejected = false;
 
+    @Setter
+    @Column(precision = 10, scale = 8)
+    private Double latitude;
+
+    @Setter
+    @Column(precision = 11, scale = 8)
+    private Double longitude;
+
     protected TimeRecord() {
     }
 
@@ -78,6 +86,12 @@ public class TimeRecord {
         this.registeredAt = registeredAt;
         this.justification = justification;
         this.editedFrom = editedFrom;
+    }
+
+    public TimeRecord(User user, Workspace workspace, RecordType recordType, RecordSource source, LocalDateTime registeredAt, String justification, TimeRecord editedFrom, Double latitude, Double longitude) {
+        this(user, workspace, recordType, source, registeredAt, justification, editedFrom);
+        this.latitude = latitude;
+        this.longitude = longitude;
     }
 
 }

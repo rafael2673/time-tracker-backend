@@ -8,5 +8,6 @@ public record UserProfileResponse(
         String email,
         String role,
         UUID workspaceId,
-        String workspaceName
+        String workspaceName,
+        boolean systemAdmin
 ) {}

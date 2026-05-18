@@ -1,5 +1,7 @@
 package com.ap101gamestudio.timetracker.dto;
 
+import java.util.List;
+
 public record EmployeeDashboardSummary(
         double workedHours,
         double expectedHours,
@@ -7,5 +9,6 @@ public record EmployeeDashboardSummary(
         double monthlyBalance,
         int unjustifiedAbsences,
         long pendingJustifications,
-        int vacationDays
+        int vacationDays,
+        List<DailySummaryResponse> weeklyActivity
 ) {}

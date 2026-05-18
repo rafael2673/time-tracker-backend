@@ -42,4 +42,5 @@ public interface TimeRecordRepository extends JpaRepository<TimeRecord, UUID> {
             @Param("status") String status,
             Pageable pageable);
 
+    long countByRegisteredAtAfter(LocalDateTime dateTime);
 }

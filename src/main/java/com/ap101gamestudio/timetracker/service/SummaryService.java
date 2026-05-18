@@ -13,9 +13,11 @@ import com.ap101gamestudio.timetracker.repository.WorkspaceMembershipRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.TemporalAdjusters;
 import java.util.*;
 
 @Service
@@ -46,7 +48,8 @@ public class SummaryService {
         validarPermissaoAcesso(authenticatedEmail, employeeId, workspaceId);
 
         User employee = buscarUsuarioPorId(employeeId);
-        validarVinculoComWorkspace(employee.getId(), workspaceId);
+        WorkspaceMembership membership = membershipRepository.findByUserIdAndWorkspaceIdWithPolicy(employee.getId(), workspaceId)
+                .orElseThrow(() -> new DomainException("error.employee.not_in_workspace"));
 
         YearMonth now = YearMonth.now();
         
@@ -66,6 +69,8 @@ public class SummaryService {
 
         long pendingJustifications = timeTrackingService.countJustificationsPending(employeeId, workspaceId);
 
+        List<DailySummaryResponse> weeklyActivity = calculateWeeklyActivity(membership, workspaceId);
+
         return new EmployeeDashboardSummary(
                 quarterlyBalance.workedHours(),
                 quarterlyBalance.expectedHours(),
@@ -73,8 +78,40 @@ public class SummaryService {
                 monthlyBalance.balance(),
                 monthlyBalance.unjustifiedAbsences(),
                 pendingJustifications,
-                vacationRight.earnedVacationDays()
+                vacationRight.earnedVacationDays(),
+                weeklyActivity
         );
+    }
+
+    private List<DailySummaryResponse> calculateWeeklyActivity(WorkspaceMembership membership, UUID workspaceId) {
+        LocalDate today = LocalDate.now();
+        LocalDate monday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        LocalDate sunday = monday.plusDays(6);
+
+        List<SpecialDate> weekSpecialDates = specialDateRepository.findRelevantDates(workspaceId, monday, sunday);
+        List<DailySummaryResponse> activity = new ArrayList<>();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+        for (int i = 0; i < 7; i++) {
+            LocalDate currentDate = monday.plusDays(i);
+            SpecialDate sd = findMatchingSpecialDate(weekSpecialDates, currentDate);
+
+            List<TimeRecordResponse> recordResponses = timeTrackingService.getRecordsByUserIdAndDate(
+                    membership.getUser().getId(), currentDate, workspaceId
+            );
+
+            double worked = calculateHoursFromResponses(recordResponses);
+            double expected = calculateExpectedHours(membership, currentDate, sd);
+
+            activity.add(new DailySummaryResponse(
+                    currentDate.getDayOfWeek().name(),
+                    Math.round(worked * 100.0) / 100.0,
+                    Math.round(expected * 100.0) / 100.0,
+                    currentDate.format(formatter)
+            ));
+        }
+
+        return activity;
     }
 
     public NextHolidayResponse getNextSpecialDate(UUID workspaceId, UUID employeeId, String authenticatedEmail) {

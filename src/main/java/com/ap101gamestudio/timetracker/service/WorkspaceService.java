@@ -67,7 +67,17 @@ public class WorkspaceService {
         Page<WorkspaceMembership> result = membershipRepository.findByWorkspaceIdWithFilters(workspaceId, search, role, pageable);
 
         List<WorkspaceMemberResponse> content = result.getContent().stream()
-                .map(wm -> new WorkspaceMemberResponse(wm.getUser().getId(), wm.getUser().getFullName(), wm.getUser().getEmail(), wm.getRole().name(), wm.getWorkPolicy() != null ? wm.getWorkPolicy().getName() : null, wm.getWorkPolicy() != null ? wm.getWorkPolicy().getId() : null, wm.getJoinedAt(), wm.isActive()))
+                .map(wm -> new WorkspaceMemberResponse(
+                        wm.getUser().getId(),
+                        wm.getUser().getFullName(),
+                        wm.getUser().getEmail(),
+                        wm.getRole().name(),
+                        wm.getWorkPolicy() != null ? wm.getWorkPolicy().getName() : null,
+                        wm.getWorkPolicy() != null ? wm.getWorkPolicy().getId() : null,
+                        wm.getJoinedAt(),
+                        wm.isActive(),
+                        wm.isAllowHomeOffice()
+                ))
                 .toList();
 
         return new PageResponse<>(content, result.getTotalPages(), result.getTotalElements(), result.getNumber());
@@ -105,6 +115,7 @@ public class WorkspaceService {
         }
 
         WorkspaceMembership newMembership = new WorkspaceMembership(targetUser, workspace, request.role(), policy);
+        newMembership.setAllowHomeOffice(request.allowHomeOffice());
         membershipRepository.save(newMembership);
 
         return new MemberResponse(
@@ -157,6 +168,7 @@ public class WorkspaceService {
 
         targetMembership.setRole(UserRole.valueOf(request.role()));
         targetMembership.setWorkPolicy(policy);
+        targetMembership.setAllowHomeOffice(request.allowHomeOffice());
         membershipRepository.save(targetMembership);
     }
 
